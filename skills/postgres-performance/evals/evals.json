@@ -1,0 +1,65 @@
+{
+  "skill_name": "postgres-performance",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "После вчерашнего релиза CPU PostgreSQL вырос с 35% до 85%, а p95 эндпоинта /orders — с 180 до 900 мс. pg_stat_statements показывает, что запрос SELECT id, total, created_at FROM orders WHERE account_id = $1 AND status = 'pending' ORDER BY created_at DESC LIMIT 50 теперь делает 18 тысяч вызовов в минуту и лидирует по total_exec_time. На таблице 80 млн строк есть индексы orders(account_id) и orders(created_at). EXPLAIN ANALYZE для крупного клиента показывает Bitmap Heap Scan по account_id, 420 тысяч heap blocks, затем filter status и top-N sort; pending — около 0.2% строк. Диагностируй причину и предложи безопасную оптимизацию для production, но ничего там не применяй.",
+      "expected_output": "Evidence-backed diagnosis that attributes total load to call rate plus poor index fit, proposes and justifies a minimal query/index candidate, and gives a production-safe validation and rollout plan without applying changes.",
+      "files": [],
+      "expectations": [
+        "Separates observed facts from the causal hypothesis and notes that total impact, not one slow execution, drives prioritization.",
+        "Proposes a workload-matched candidate such as a partial multicolumn index on account_id and created_at for pending rows, while checking predicate stability, existing-index overlap, write/WAL cost, and representative tenants.",
+        "Defines required before/after proof for correctness, p95/p99, throughput, buffers, CPU, WAL, write latency, index size, and rollback without fabricating results.",
+        "Keeps the task read-only and does not claim that a production index was created."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Production тормозит, но менять ничего нельзя — только diagnosis. В pg_stat_activity 60 active с wait_event_type=Lock и wait_event=transactionid. Самые медленные запросы — простые UPDATE jobs SET state='running' WHERE id=$1. Есть одна сессия idle in transaction уже 47 минут, её pid встречается в pg_blocking_pids почти у всех ожидающих. Скажи, что является причиной, какие безопасные read-only проверки ещё сделать и что рекомендовать дежурному. Не отменяй сессии и не запускай maintenance.",
+      "expected_output": "Read-only lock-chain diagnosis that distinguishes blocking time from query-plan cost, preserves evidence, and recommends a bounded incident action for an authorized operator without performing it.",
+      "files": [],
+      "expectations": [
+        "Identifies the long idle transaction as the likely root blocker and labels confidence and remaining checks.",
+        "Uses bounded pg_stat_activity, pg_blocking_pids, transaction age, application_name, and query/lock context checks rather than suggesting query indexes first.",
+        "Does not cancel a backend, change configuration, vacuum, or perform other writes.",
+        "Separates immediate operator mitigation from the application transaction-boundary root-cause fix."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Нужно увеличить write throughput PostgreSQL примерно на 40%. Давай просто поднимем max_connections с 200 до 800, work_mem с 16MB до 128MB и shared_buffers до 75% RAM. Сейчас 32 vCPU, 128GB RAM, пул приложений суммарно допускает 600 соединений. На пике active обычно 70, остальные idle; память иногда уходит в swap. pg_stat_database показывает много temp_bytes, pg_stat_checkpointer — requested checkpoints растут, а pg_stat_wal — большой wal_bytes. Составь план оптимизации и критерии готовности.",
+      "expected_output": "A measured throughput plan that rejects unproven global knob inflation, decomposes connection, spill, checkpoint, and WAL hypotheses, and defines controlled experiments and capacity proof.",
+      "files": [],
+      "expectations": [
+        "Explains the multiplicative memory risk of work_mem across operations, sessions, and parallel workers and prefers targeted SET LOCAL experiments.",
+        "Uses active versus idle connections to prioritize pooling/concurrency budgets instead of raising max_connections by default.",
+        "Requires time-window deltas and workload attribution for temp I/O, requested checkpoints, and WAL before selecting configuration changes.",
+        "Defines a representative concurrent write benchmark with correctness, p95/p99, TPS, CPU, I/O, memory/swap, WAL, checkpoint, error, and replica-lag guardrails."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "PostgreSQL 16 на RDS несколько раз в день начинает тормозить, но сейчас инцидента нет и никаких метрик, планов или pg_stat_statements мне не дали. Доступа к production у тебя тоже нет. Не задавай мне вопросы — просто составь полезный план оптимизации и рекомендуемые настройки, чтобы команда могла начать расследование.",
+      "expected_output": "A bounded evidence-collection plan that establishes a repeatable baseline and avoids inventing a bottleneck or recommending unmeasured settings.",
+      "files": [],
+      "expectations": [
+        "States that the available evidence cannot identify a bottleneck and does not fabricate a diagnosis.",
+        "Defines one repeatable incident-window measurement covering an application target, PostgreSQL and host/provider signals, and reset boundaries.",
+        "Provides bounded read-only collection steps with environment identity, timeouts, privacy handling, and specific missing artifacts.",
+        "Does not prescribe configuration values, indexes, maintenance, or scaling before workload attribution."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "После релиза p99 API вырос с 300 мс до 2.1 с, поэтому команда считает, что тормозит PostgreSQL. Но p99 выполнения SQL остался 35–45 мс, CPU базы 28%, I/O latency и lock waits без изменений. При этом ожидание connection acquire внутри приложения выросло до 1.4 с, очередь worker pool — с 0 до 900, а число активных backend PostgreSQL держится около 20 из лимита 100. Диагностируй bottleneck и скажи, что оптимизировать.",
+      "expected_output": "An evidence-backed conclusion that the current bottleneck is in application-side queueing or connection acquisition rather than PostgreSQL, with a bounded discriminating probe and no unnecessary database change.",
+      "files": [],
+      "expectations": [
+        "Separates endpoint latency from SQL execution time and identifies application queueing or pool acquisition as the leading constraint.",
+        "Names the unchanged database signals as evidence against PostgreSQL saturation while retaining an explicit competing explanation.",
+        "Proposes a bounded application-side probe using aligned request, queue, pool, and database timestamps or traces.",
+        "Recommends no PostgreSQL tuning unless new evidence moves the bottleneck into the database."
+      ]
+    }
+  ]
+}
