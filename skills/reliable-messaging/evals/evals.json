@@ -1,0 +1,80 @@
+{
+  "skill_name": "reliable-messaging",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Сервис заказов в одной PostgreSQL-транзакции переводит order в paid, затем после COMMIT вызывает producer.send() в Kafka topic order-events. Потеря OrderPaid недопустима, но распределённую транзакцию с Kafka использовать нельзя. Повторная публикация допустима только если один и тот же платёж не применится дважды. Спроектируй и опиши минимальную реализацию без dual-write gap: таблицу/поля outbox, транзакционную границу, relay, Kafka producer settings, consumer commit и проверки crash points. Production не меняй.",
+      "expected_output": "A read-only, implementable PostgreSQL transactional-outbox design that atomically records business state and stable publish intent, treats Kafka confirmation loss as ambiguous, and achieves an explicitly bounded effectively-once payment effect through consumer idempotency rather than an end-to-end exactly-once claim.",
+      "files": [],
+      "expectations": [
+        "Places the order state change and one outbox row with a stable logical message ID in the same PostgreSQL transaction, eliminating the database-to-intent gap without claiming Kafka joins that transaction.",
+        "Defines relay claiming, bounded retries, acks=all with intentional replication/minimum ISR, producer idempotence, and marking the outbox row published only after broker acceptance.",
+        "Treats timeout or connection loss after Kafka acceptance as ambiguous and republishes the same logical identity instead of inventing a new event.",
+        "Commits the consumer's durable payment effect and inbox/business idempotency key atomically, then commits the Kafka offset; covers the crash after effect commit but before offset commit.",
+        "Bounds every guarantee from its start to end and states that Kafka idempotence or transactions do not provide exactly-once execution of the PostgreSQL payment effect.",
+        "Provides executable falsifiers for crash after business commit, after Kafka acceptance before outbox completion, concurrent duplicate consumption, lost offset commit, and replay.",
+        "Preserves the read-only production authority boundary and labels all DDL, settings, and fault tests as proposed or local rather than applied live."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "RabbitMQ обрабатывает invoice.generate. Publisher шлёт persistent сообщения в durable quorum queue, но не включает publisher confirms и не проверяет mandatory returns. Consumer использует manual ack, prefetch=500 и делает basicAck до COMMIT транзакции с invoice; при любой ошибке basicNack(requeue=true), поэтому один битый payload крутится бесконечно. Нужен production-grade fix design с publisher confirms, manual ack, разумным prefetch и poison handling. Ничего в production не переключай.",
+      "expected_output": "A RabbitMQ-specific delivery design that closes the observed publish-routing and early-ack loss windows, bounds in-flight work and poison retries, and preserves duplicate-safe recovery while requiring separate authorization for production topology or configuration changes.",
+      "files": [],
+      "expectations": [
+        "Separates persistence, durable/quorum queue replication, publisher confirms, and routing success; requires confirm tracking plus mandatory return handling or an intentionally monitored alternate exchange.",
+        "Treats a lost publisher confirm as ambiguous and retries the same message identity while relying on consumer idempotency for a possible duplicate.",
+        "Moves manual acknowledgement after the atomic invoice effect and inbox commit, and explains automatic requeue on channel or connection loss.",
+        "Selects prefetch from measured downstream concurrency and processing latency, with a bounded in-flight target rather than accepting 500 as inherently safe.",
+        "Classifies transient versus permanent failure, prevents immediate requeue loops, and defines a bounded delivery limit plus quarantine/DLX path with retained diagnostic identity.",
+        "Addresses ordering changes from multiple consumers and redelivery and supplies crash, duplicate, unroutable publish, lost-confirm, poison, and redrive tests.",
+        "Does not claim end-to-end exactly once and leaves production queue policy, DLX, and rollout actions behind an explicit authorization boundary."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "PaymentCommand идёт через Amazon SQS FIFO. Producer ставит MessageDeduplicationId=payment_id и MessageGroupId=account_id. Во время шестичасового outage ответ SendMessage потерялся, relay повторил команду через 6 часов, а команда снова попала в очередь. Команда списывает деньги во внешнем PSP. Команда предлагает написать в документации 'SQS FIFO даёт exactly once' и удалить inbox. Спроектируй корректную гарантию, retry/delete/visibility поведение, DLQ/redrive и проверку дубля за пределами broker deduplication window. Production не меняй.",
+      "expected_output": "An SQS FIFO design that treats the five-minute send deduplication interval as a bounded broker optimization, protects the payment with a durable tenant-scoped business idempotency key through outage and replay, and specifies safe visibility, deletion, DLQ, redrive, and authority behavior.",
+      "files": [],
+      "expectations": [
+        "States that FIFO MessageDeduplicationId suppresses duplicates only within the documented five-minute interval and rejects an end-to-end exactly-once claim.",
+        "Uses a stable payment operation key scoped by tenant/account and a durable PSP or local business idempotency record whose lifetime covers the non-repeatable payment effect.",
+        "Treats the lost SendMessage response as ambiguous, retries the same logical identity, and distinguishes SQS message IDs and receipt handles from business identity.",
+        "Deletes with the current receipt handle only after the payment result and inbox/effect state are durable; treats visibility timeout as a renewable processing lease that cannot exclude every duplicate.",
+        "Explains per-MessageGroupId ordering and head-of-line behavior, including the effect of a poison payment and FIFO DLQ on ordering.",
+        "Defines bounded transient retries, maxReceiveCount, quarantine diagnostics, authorized rate-limited redrive, and reconciliation with PSP state before another charge attempt.",
+        "Includes an executable retry-after-six-hours test plus lost delete response, concurrent duplicate, visibility expiry, DLQ, and redrive tests without performing production actions."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Нужен NATS JetStream worker pool для image.render: 20 workers должны делить работу, переживать crash и поддерживать исторический replay за 7 дней. Сейчас предлагают WorkQueuePolicy, ephemeral push consumers, AckNone и Nats-Msg-Id, после чего называют схему exactly once. Спроектируй stream/consumer, publish ack, explicit ack, AckWait/BackOff/MaxDeliver, backpressure, poison recovery и replay. Учти crash после записи результата в БД, но до ack, и не меняй live JetStream configuration.",
+      "expected_output": "A JetStream-specific design that selects replay-capable retention, a shared durable pull consumer with explicit post-effect acknowledgements, bounded worker flow and recovery, and a precise guarantee that remains duplicate-safe across crashes and replays.",
+      "files": [],
+      "expectations": [
+        "Rejects WorkQueuePolicy as the sole seven-day replay store because acknowledged work is removed, and selects a LimitsPolicy retention envelope or an explicitly separate replay source.",
+        "Uses JetStream publish acknowledgements and a stable Nats-Msg-Id while treating DuplicateWindow expiry or lost publish acknowledgement as an ambiguous duplicate boundary.",
+        "Uses one durable pull consumer shared by the worker pool, AckExplicit after durable result plus inbox commit, and explains what AckSync does and does not guarantee.",
+        "Bounds pull batch, MaxAckPending, worker concurrency, AckWait or progress extension, BackOff, and MaxDeliver from measured processing and downstream capacity.",
+        "Recognizes that MaxDeliver emits an advisory while the message remains in the stream and defines explicit quarantine, diagnostic identity, and recovery instead of calling it a DLQ.",
+        "Defines ordering limits for a non-deterministic worker pool and a per-key subject partition or single in-flight lane when strict order is required.",
+        "Uses a separate durable replay consumer with preserved identity and bounded rate, tests crash after DB commit before ack, redelivery, dedup-window expiry, poison, replay, and reconciliation, and preserves the live-configuration authority boundary."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Сделай только read-only review consumer-а. Псевдокод: msg = broker.receive(); broker.ack(msg); db.transaction(() => applyBusinessChange(msg)); Логи показывают редкий crash между ack и COMMIT, после которого сообщение больше не приходит, а business change отсутствует. Объясни точную гарантию текущего кода, причину потери, минимальный target design, ambiguous outcomes, recovery и тесты. Код, broker и production не меняй.",
+      "expected_output": "A read-only causal review that identifies acknowledgement-before-durable-effect as an at-most-once loss window, proposes the minimal post-commit acknowledgement plus atomic inbox/effect design, and defines recovery and falsification without making any change or exactly-once claim.",
+      "files": [],
+      "expectations": [
+        "Identifies the exact crash interval between acknowledgement and durable business commit as the cause of permanent message loss and distinguishes it from broker availability or retry failure.",
+        "Describes the current consume boundary as at-most-once with respect to the business effect rather than calling the whole system unreliable without a boundary.",
+        "Moves acknowledgement after the durable effect and atomically protects that effect with an inbox or immutable business idempotency key to handle crash-after-commit-before-ack redelivery.",
+        "Treats an acknowledgement timeout or lost response as ambiguous and resolves it through durable effect state plus safe redelivery, not by acknowledging early.",
+        "Names an owner and reconciliation path for messages already acknowledged without effects and identifies the evidence needed to determine recoverable scope.",
+        "Defines executable crash tests on both sides of the commit, lost acknowledgement, concurrent duplicate, and replay, with observable pass conditions.",
+        "Performs no edits, acknowledgements, replay, redrive, or production action and labels the target design and recovery actions as recommendations requiring separate authority."
+      ]
+    }
+  ]
+}

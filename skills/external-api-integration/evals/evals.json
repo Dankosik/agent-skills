@@ -1,0 +1,76 @@
+{
+  "skill_name": "external-api-integration",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Спроектируй production-интеграцию создания платежа, но ничего у провайдера не вызывай. Контракт провайдера говорит: POST /payments принимает Idempotency-Key, ключ scoped к merchant и хранится 24 часа, повтор допустим только с тем же payload; статус можно найти по merchant_reference. После отправки JSON соединение оборвалось до чтения ответа. Позже provider присылает подписанный webhook с event_id и payment_id, доставки могут дублироваться и приходить не по порядку. Наш HTTP request должен завершиться за 2 секунды. Опиши реализацию, восстановление и доказательство, не проектируя ledger semantics.",
+      "expected_output": "A boundary-complete payment integration design that preserves one operation identity through an after-send ambiguous outcome, safely correlates webhook or lookup evidence, reconciles missing delivery, and defines authority, security, observability, rollout, and executable failure proof without making a provider call or inventing payment guarantees.",
+      "files": [],
+      "expectations": [
+        "Creates a durable local operation before the first send, binds one provider idempotency key and immutable payload/merchant scope to it, and does not create a new identity merely because the response was lost.",
+        "Classifies the after-send disconnect as ambiguous rather than failed or successful, and resolves it through the documented merchant_reference lookup and authenticated webhook before any new write.",
+        "Fits authentication, send, any eligible retry, and response handling inside the two-second end-to-end deadline while allowing separately owned reconciliation to continue later; it does not assume that every POST or 5xx is retryable.",
+        "Defines raw-payload signature verification, replay/deduplication by documented event identity, durable fast acceptance, asynchronous processing, and out-of-order handling without taking ownership of ledger transitions.",
+        "Defines observable ambiguity age, attempts, provider request/payment correlation, webhook verification/duplicates/lag, and reconciliation drift with an executable connection-loss-after-send test.",
+        "Keeps provider calls and webhook registration outside the read-only authority and labels documented provider facts separately from inferred behavior, including the 24-hour idempotency limit."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Нужно спроектировать возобновляемую синхронизацию CRM contacts. API отдаёт opaque next_cursor, позволяет 4 concurrent requests на tenant и иногда отвечает 429 с Retry-After. Процесс падает после записи части страницы. Один contact стабильно возвращает documented validation error, остальные валидны. Изменения и удаления в CRM продолжаются во время sync. Нужны restart/checkpoint, error policy, reconciliation, метрики и тесты; реальные данные не трогай.",
+      "expected_output": "A resumable, quota-aware synchronization boundary that does not skip or duplicate durable effects across crashes, does not retry a permanent validation error forever, and explicitly handles mutable pagination, deletion/drift recovery, authority, and executable failure tests without inventing cursor guarantees.",
+      "files": [],
+      "expectations": [
+        "Treats the cursor as opaque, pins tenant/filter/sort/version inputs, and advances a durable checkpoint only after all accepted page effects and permanent-failure records are durable and idempotent.",
+        "Explains both crash sides of checkpoint advancement and provides a safe replay/deduplication result instead of claiming exactly-once delivery from pagination.",
+        "Honors Retry-After no earlier than the provider signal, bounds elapsed retries and concurrency at four per tenant, shares quota pressure, and stops or reschedules when delay exceeds the synchronization deadline.",
+        "Classifies the documented validation error as permanent, records/quarantines it with an explicit partial-progress handoff, and allows unrelated contacts to progress only if the business contract permits it.",
+        "Names the lack of a stated snapshot/deletion guarantee, proposes provider-supported watermark/overlap or bounded full reconciliation rather than parsing or guessing the cursor, and measures checkpoint age, throttle delay, permanent failures, and drift.",
+        "Remains read-only against CRM data and defines fault tests for partial-page crash, expired/replayed cursor, 429 variants, duplicate contact, concurrent limiter use, mutation, and deletion."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Исправь дизайн OAuth client для внешнего API. Access token живёт 10 минут, refresh token rotates on every refresh, 20 workers одновременно видят expiry, а API иногда возвращает 401. Сейчас каждый worker refresh-ит сам и безусловно повторяет исходный POST. Нужны least-privilege scopes, безопасная ротация client credential без простоя и production-ready tests. Можно менять только локальный код и тесты; менять credentials у провайдера нельзя.",
+      "expected_output": "A locally implementable OAuth lifecycle fix with correctly bound token caching, single-flight refresh, atomic rotating-refresh-token publication, bounded 401 handling tied to request replay safety, scoped credentials, observable failures, and a separately authorized provider-rotation procedure.",
+      "files": [],
+      "expectations": [
+        "Keys the token cache by provider/environment/tenant or subject/audience/scopes/client identity and prevents credentials or tokens from crossing those boundaries.",
+        "Coordinates the 20 workers so one refresh occurs per security binding and stores the new refresh-token generation atomically before publishing the access token; a stale refresher cannot overwrite a newer generation.",
+        "Refreshes on 401 only when the provider authentication contract identifies an expired/invalid token, then replays at most once and only when the original operation identity makes the POST safe; revoked scope, repeated 401, and invalid_grant are terminal owned states.",
+        "Defines minimum scopes/audience, secret redaction/storage, cancellation and end-to-end deadline propagation through refresh waiting, and metrics for token age, refresh result/latency, waiters, repeated 401, and credential generation without leaking secrets.",
+        "Separates local build authority from external credential creation/activation/revocation, and gives an overlap/readback/old-key revocation plan conditional on provider support without claiming rotation has happened.",
+        "Includes executable concurrent-expiry, refresh race, rotating-token crash, eligible and ineligible 401 replay, deadline/cancellation, secret-leak, and old/new credential tests."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Спроектируй webhook receiver. Официальный контракт провайдера требует HMAC-SHA256 по timestamp + raw body, допускает 5 минут clock skew, даёт delivery_id, повторяет delivery до 48 часов, не гарантирует порядок и ждёт 2xx не дольше 3 секунд. Сейчас framework сначала парсит JSON, handler сразу обновляет состояние, а duplicate делает update повторно. Нужны security, replay protection, dedupe, ordering, async processing, recovery и rollout; webhook у провайдера не регистрируй и production events не replay-ь.",
+      "expected_output": "A secure webhook boundary that authenticates exact bytes and freshness before durable acceptance, acknowledges quickly after atomic deduplication, processes asynchronously without order assumptions, reconciles lost or incompatible events, and respects external-action authority.",
+      "files": [],
+      "expectations": [
+        "Moves verification ahead of parsing and any effect, uses the exact raw body plus signed timestamp and the documented five-minute tolerance, constant-time HMAC comparison or official library, correct environment/key generation, TLS, and bounded body handling.",
+        "Atomically retains the authenticated delivery envelope and delivery_id before a sub-three-second 2xx; durable-store failure returns the provider-defined retry response and business work occurs asynchronously.",
+        "Makes concurrent duplicate delivery a no-op with the same safe acknowledgement, retains dedupe evidence for at least the documented 48-hour redelivery window, and does not confuse timestamp freshness with deduplication.",
+        "Assumes unordered delivery, prevents stale events from regressing state, and uses documented resource version/lookup plus reconciliation for gaps instead of sorting by local receipt time or inventing sequence guarantees.",
+        "Observes verification and replay rejection, duplicates, acknowledgement and processing lag, queue age, unknown schemas, and reconciliation drift; tests byte mutation, stale/future timestamp, wrong key, concurrent duplicate, reorder, durable-store failure, slow consumer, and dropped callback.",
+        "Treats webhook registration, signing-key change, and production replay as separately authorized actions with bounded rollout/rollback, and does not claim any was performed."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Сделай только read-only review HTTP client. Он использует один global retry middleware: три раза повторяет любой 4xx/5xx и network error, включая POST; timeout не задан, context/cancellation не передаётся, 429 игнорирует Retry-After, 401 повторяется с тем же token. Provider docs и idempotency semantics в репозитории не зафиксированы. Найди production-риски, причину и предложи минимальный план исправления и проверки. Код не меняй и внешние запросы не делай.",
+      "expected_output": "A read-only root-cause review showing that policy-free global retries and unbounded I/O break the external boundary, with operation-specific remediation, explicit evidence gaps, recovery/observability/security requirements, and executable tests rather than code changes or fabricated provider guarantees.",
+      "files": [],
+      "expectations": [
+        "Preserves read-only authority: inspects and reports without editing code, calling the provider, changing credentials, or claiming a fix was applied.",
+        "Identifies the shared global middleware as the root cause affecting all callers, traces or requests the caller/operation inventory, and distinguishes duplicate-side-effect, retry-storm, deadline leak, cancellation, quota, and stale-credential risks.",
+        "Does not replace the middleware with a universal status table; requires each operation's provider contract, identity/idempotency scope and retention, retry eligibility, deadline, outcome taxonomy, and ambiguity resolution before enabling retries.",
+        "Classifies after-possible-send network failures and side-effecting 5xx as potentially ambiguous, makes permanent failures consume zero retry budget, handles 429 provider delay within a deadline/quota budget, and allows at most one contract-backed token refresh/replay when the operation is safe.",
+        "Defines reconciliation for unresolved effects, scoped observability for latency/attempts/throttling/ambiguity/authentication/drift, and executable tests for unbounded I/O, cancellation, after-send loss, 429, permanent 4xx, repeated 401, and retry exhaustion.",
+        "Separates confirmed code facts from missing provider guarantees and leaves readiness not ready until contracts and behavioral failure tests exist; static validation is not presented as runtime proof.",
+        "Prioritizes the retry middleware and affected boundary stages; does not invent webhook, migration, database, or rollout sections that do not change the review verdict."
+      ]
+    }
+  ]
+}

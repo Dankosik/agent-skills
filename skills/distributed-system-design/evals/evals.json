@@ -1,0 +1,75 @@
+{
+  "skill_name": "distributed-system-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "У нас B2B marketplace в виде модульного монолита: PostgreSQL, 18 инженеров, 1200 заказов в минуту на пике, p99 checkout 420 мс при SLO 700 мс, доступность 99.9%. Две команды предлагают сразу выделить catalog, orders, inventory, payments, delivery и notifications в отдельные сервисы с Kafka и отдельной базой на сервис, потому что в следующем году инженеров станет около 30. Реальных проблем независимого масштабирования и релизов пока нет, но checkout должен исключать повторный заказ по idempotency key и не продавать остаток ниже нуля. Спроектируй целевую архитектуру на ближайшие 12 месяцев, сравни с предложением микросервисов и дай критерии, при которых декомпозиция действительно понадобится. Ничего не внедряй.",
+      "expected_output": "A forces-driven design that starts from the viable modular monolith, quantifies the current envelope, protects checkout invariants, and defines evidence-based extraction seams instead of adopting microservices and Kafka by default.",
+      "files": [],
+      "expectations": [
+        "Uses the supplied context without re-asking for it, separates facts, assumptions, targets, and open decisions, and keeps the request read-only.",
+        "Uses the supplied peak rate and latency/SLO to build a concrete capacity and concurrency envelope rather than inventing scale pressure.",
+        "Starts with the simplest viable topology and requires each proposed boundary, datastore, broker, or cache to resolve a named force.",
+        "Keeps order idempotency and inventory non-oversell inside explicit authoritative transaction or concurrency boundaries.",
+        "Compares the modular design with the proposed microservices alternative across failure, consistency, delivery, operations, and team cost, and gives measurable extraction triggers.",
+        "Defines rollout and proof without claiming that implementation, deployment, or production validation occurred."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Спроектируй ingestion и query-систему для телеметрии устройств. В среднем приходит 180 тысяч событий/с, пик 600 тысяч/с на 20 минут, payload после декодирования 900 байт, один device иногда генерирует в 200 раз больше среднего. Сырые события храним 30 дней, агрегаты 2 года. Потеря подтвержденного события недопустима, дубликаты допустимы только если будут устранены до суточного billing aggregate. Dashboard должен показывать данные не старше 2 минут и отвечать p99 < 1 секунды. Один регион допустимо потерять с RPO 30 секунд и RTO 15 минут. Дай архитектуру, capacity math, partitioning, overload/recovery model и validation plan.",
+      "expected_output": "A quantitatively feasible ingestion architecture with explicit durability, partitioning, skew, derived-data freshness, regional recovery, backlog drain, and end-to-end proof contracts.",
+      "files": [],
+      "expectations": [
+        "Calculates at least ingress bandwidth, daily raw volume before replication/overhead, burst volume, retention order of magnitude, and recovery or drain capacity with visible units and assumptions.",
+        "Defines message/event identity, durable acceptance, source of truth, deduplication boundary, aggregate rebuild, and the exact meaning of the two-minute freshness target.",
+        "Chooses and justifies a partition key while addressing the 200x hot-device skew, rebalancing, and cross-partition aggregation.",
+        "Models bounded admission, backpressure, backlog age, retry amplification, degraded behavior, and capacity after a failure domain is lost.",
+        "Connects the multi-region data path to the stated RPO/RTO and defines fencing, traffic routing, catch-up, and failback rather than writing 'use active-active'.",
+        "Hands detailed messaging, job, cache, schema, or PostgreSQL work to dedicated skills while retaining their cross-component contracts."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Нужно спроектировать checkout между Order, Inventory и внешним Payment Provider. Общей distributed transaction нет. Клиент может повторять запрос, HTTP timeout не показывает, создал ли provider payment, inventory reservation истекает через 10 минут, webhook provider приходит с дублями и иногда раньше HTTP response. Бизнес требует: не списать деньги дважды, каждый подтвержденный платеж должен привести либо к заказу, либо к видимой оператору reconciliation-задаче; нельзя обещать ровно один вызов. Опиши component interactions, state ownership, consistency, saga/recovery, user-visible states, observability и тесты.",
+      "expected_output": "A concrete checkout process with durable operation identity, explicit local commits and pending states, bounded provider and inventory contracts, recovery and reconciliation, and no false exactly-once or rollback claims.",
+      "files": [],
+      "expectations": [
+        "Defines one checkout/payment intent identity reused across client retries, provider calls, callbacks, state transitions, and reconciliation.",
+        "Names authoritative state and durable commit points for order, reservation, payment knowledge, and workflow progress.",
+        "Treats timeout and webhook/response reordering as ambiguous distributed outcomes and specifies idempotent handling and reconciliation.",
+        "Uses saga or forward recovery with explicit irreversible effects, expiration races, terminal/manual states, and user-visible pending behavior rather than claiming transactional rollback.",
+        "Provides a failure matrix and executable crash, duplicate, reorder, expiry, lost-response, and replay tests.",
+        "Routes provider-specific and messaging implementation to external-api-integration and reliable-messaging without losing the end-to-end invariant."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Проектируем multi-tenant document service для клиентов в ЕС и США. Данные клиентов ЕС не могут храниться в США. 80% операций — чтения, p95 < 150 мс внутри домашнего региона, availability 99.99%, RPO 0 для подтвержденных изменений документа и RTO 10 минут при потере региона. Команда предлагает global active-active database и routing в ближайший регион для всех запросов. Документ редактирует один пользователь за раз, но фоновые индексаторы и antivirus workers работают асинхронно. Разбери предложение и дай более точный multi-region design, failover/failback и disaster-recovery proof.",
+      "expected_output": "A residency-aware multi-region design that tests whether global active-active is earned, separates tenant placement and data authority from derived asynchronous work, and makes the RPO/RTO and regional-loss proof concrete.",
+      "files": [],
+      "expectations": [
+        "Identifies the conflict between nearest-region global routing and EU residency and assigns tenants or data to explicit regional authorities.",
+        "Challenges active-active using the single-writer document semantics and compares it with a simpler home-region, cell/stamp, or active-passive alternative.",
+        "Defines confirmed-write semantics, synchronous durability scope, surviving capacity, routing, fencing, dependency independence, and behavior during isolation.",
+        "Separates authoritative documents from rebuildable indexes, scans, caches, and worker state and assigns freshness and recovery contracts.",
+        "Defines a tested restore/failover/failback path that can establish RPO 0 and RTO 10 minutes, including integrity and split-brain checks.",
+        "Labels assumptions and unverified provider capabilities instead of presenting a cloud product name as proof."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Сделай read-only review архитектуры нового customer-notification сервиса. В диаграмме: API Gateway -> Kafka -> Router Service -> Email Service, SMS Service и Push Service; у каждого своя PostgreSQL, перед Router стоит Redis, все сервисы ретраят вызовы по 5 раз. Требования пока только 'масштабируемо и надежно'. Не указаны объем, SLO, owner данных, message identity, ordering, TTL уведомления, provider limits, DLQ/replay, tenant isolation, rollout или recovery. Команда уже называет дизайн production-ready. Дай verdict, самые опасные пробелы, минимальный design baseline и evidence plan. Ничего не меняй.",
+      "expected_output": "A not-ready architecture review that exposes missing forces and contracts, avoids rubber-stamping named technologies, proposes the simplest defensible baseline, and defines the evidence required for production readiness.",
+      "files": [],
+      "expectations": [
+        "Leads with a clear not-ready verdict, ranks the decision-changing gaps, names the exact next evidence or action, and keeps the review read-only.",
+        "Distinguishes facts from unknowns and asks for or parameterizes load, latency, availability, expiry, tenant, and provider constraints without fabricating numbers.",
+        "Identifies ownerless notification intent/status, message identity, commit and acknowledgement boundaries, ordering, retry multiplication, provider ambiguity, and reconciliation gaps.",
+        "Evaluates whether Kafka, Redis, four services, and separate databases each resolve a named force and offers a simpler viable topology for the current evidence.",
+        "Provides a failure/overload matrix and bounded load, duplicate, replay, provider-timeout, backlog, isolation, deployment, and recovery proof plan.",
+        "Uses dedicated capability skills as handoffs while preserving one end-to-end notification contract."
+      ]
+    }
+  ]
+}

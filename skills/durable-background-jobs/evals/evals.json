@@ -1,0 +1,107 @@
+{
+  "skill_name": "durable-background-jobs",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Спроектируй и покажи минимальную реализацию PostgreSQL-backed очереди для invoice_capture. Несколько workers выбирают jobs через FOR UPDATE SKIP LOCKED. Сейчас worker вызывает внешний billing API, получает успешный charge, а затем иногда падает до UPDATE jobs SET state='completed'. После lease expiry второй worker повторяет charge. Business transaction и job enqueue находятся в том же PostgreSQL. Нужны state machine, SQL/псевдокод ключевых транзакций, recovery и реально исполнимые tests. Production не меняй.",
+      "expected_output": "A PostgreSQL-specific, lease-oriented design that atomically enqueues with business state, treats SKIP LOCKED as a short claim mechanism, protects the billing effect across ambiguous completion, and proves recovery with multiple workers and crash injection without changing production.",
+      "files": [],
+      "expectations": [
+        "Provides a state/crash matrix covering enqueue, claim, external effect, effect-before-complete, lease expiry, retry, and completion, with durable owner, lease/commit fact, next state, disposition, recovery, signal, and executable test for each row.",
+        "Uses FOR UPDATE SKIP LOCKED only inside a short claim transaction and persists owner, attempt, lease generation, and expiry; stale renewal or completion is rejected conditionally.",
+        "Commits the business decision and enqueue in one PostgreSQL transaction and includes rollback plus ambiguous-enqueue tests.",
+        "Does not promise exactly-once execution; derives a stable billing-effect idempotency key or durable effect ledger so a crash after charge before completion converges on one charge/result.",
+        "Defines transient, permanent, poison, and operator-actionable dispositions with bounded attempts, elapsed retry budget, capped backoff, jitter, quarantine, and reconciliation.",
+        "Includes runnable integration and crash-point tests with at least two workers, real PostgreSQL locking, lease expiry, duplicate attempts, and an assertion of one durable charge effect.",
+        "Preserves the read-only production authority boundary and labels SQL as proposed or local rather than applied."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Нужно спроектировать ежедневную billing job: в 02:30 по локальному времени каждого tenant, timezone хранится как IANA ID. В день перехода DST 02:30 может отсутствовать или встретиться дважды. После outage scheduler должен обработать misfires, но нельзя выставить два счёта за один billing day; один run иногда длится дольше суток. Определи schedule, overlap, retry/recovery, observability и executable tests. Никаких изменений production schedule не делай.",
+      "expected_output": "A civil-time billing schedule contract with explicit DST gap/fold, misfire and overlap policies, stable occurrence and billing-effect identities, bounded recovery, and deterministic plus integration proof without changing the live schedule.",
+      "files": [],
+      "expectations": [
+        "Defines an IANA-zone civil-time contract, time-zone data policy, explicit DST gap and fold choices, and a stable schedule occurrence or billing-period identity independent of actual start time.",
+        "Chooses and justifies bounded misfire/catch-up and overlap behavior for a run that may exceed the interval, avoiding an unbounded backlog or concurrent duplicate billing.",
+        "Provides a state/crash matrix including schedule creation, occurrence enqueue, claim, invoice effect, effect-before-complete, retry, quarantine, and recovery after scheduler outage.",
+        "Protects invoice creation with a tenant-and-billing-period business-effect key and handles ambiguous completion without promising exactly-once execution.",
+        "Bounds retry attempts and elapsed time with backoff and jitter, separates poison/permanent/operator failures, and names reconciliation plus manual recovery requiring authorization.",
+        "Includes deterministic zone tests for spring gap and autumn fold in named real zones, misfire and overlap tests, and an integration crash test asserting one invoice per billing period.",
+        "Does not mutate, backfill, pause, or replace a production schedule; any such production action it proposes is labeled as requiring separate authorization."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Спроектируй production-grade job для backfill 600 млн строк. Job должен идти часами, сохранять checkpoint, heartbeat, соблюдать global и per-tenant throttling, реагировать на cancellation и после падения продолжать с правильного места. Во время deploy workers должны drain без потери прогресса, payload/checkpoint schema будет меняться между версиями. Дай минимальный implementation shape и настоящие deterministic, integration, crash и load tests. Сам backfill и drain в production не запускай.",
+      "expected_output": "A resumable, lease-safe backfill design whose durable chunk checkpoints, idempotent effects, throttling, cancellation and deploy compatibility are explicitly separated and proven without running production operations.",
+      "files": [],
+      "expectations": [
+        "Separates lease heartbeat from durable checkpoint and records the next unprocessed cursor only after a replay-safe chunk effect commits.",
+        "Provides a state/crash matrix for claim, each chunk effect, checkpoint, heartbeat loss, cancellation request/observation, resume, lease expiry, deploy drain, and terminal/quarantine states.",
+        "Uses stable per-row or per-chunk business-effect keys and conditional lease generation so duplicate or stale attempts cannot multiply effects or advance checkpoints incorrectly.",
+        "Defines bounded retry and poison/operator handling, reconciliation, stuck-job detection, and separately authorized manual retry or execution backfill.",
+        "Specifies global and per-tenant concurrency/rate budgets, fair selection, backpressure, responsive cancellation, and queue/checkpoint/lease observability.",
+        "Defines N and N-1 payload/checkpoint compatibility, stop-claiming-first drain behavior, hard shutdown recovery, and criteria for retiring old workers.",
+        "Includes runnable deterministic transition tests, real integration tests, crash injection at every commit point, and a load test proving fairness, throttling, renewal headroom, and eventual resume.",
+        "Does not start the production backfill, cancel jobs, or drain workers."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Диагностируй consumer Amazon SQS. VisibilityTimeout=30s, p99 runtime=95s, renewals нет. Два consumers иногда обрабатывают одно сообщение одновременно. После 8 receive один poison item всё ещё крутится в основной queue. Handler пишет заказ во внешний API и затем DeleteMessage; иногда delete response теряется. Нужны минимальный fix design, retry/recovery и реальные tests, но AWS/production не меняй.",
+      "expected_output": "An SQS-specific diagnosis and fix design that uses receipt-handle visibility renewal, idempotent durable business effects, bounded DLQ redrive, and real duplicate/crash tests without changing AWS resources.",
+      "files": [],
+      "expectations": [
+        "Attributes overlap to visibility shorter than runtime, maps receive/receipt handle/visibility/delete precisely, and notes that SQS can still deliver duplicates rather than promising exactly-once execution.",
+        "Defines renewal cadence with headroom and jitter, behavior when renewal becomes uncertain, the 12-hour visibility ceiling, and chunking or another engine for longer work.",
+        "Provides a state/crash matrix covering receive, renewal, visibility expiry, external effect, effect-before-delete, lost delete response, redelivery, poison redrive, and terminal recovery.",
+        "Uses a stable order-effect idempotency key or reconciliation before replay; the receipt handle and receive count are attempt metadata, not business identity.",
+        "Configures a bounded receive/retry budget and DLQ/quarantine with alerts, evidence, operator runbook, and separately authorized redrive.",
+        "Includes real SQS API or faithful-emulator tests with two consumers, forced expiry, lost renewal/delete responses, poison maxReceiveCount, old receipt handles, and one durable external effect assertion.",
+        "Keeps the diagnosis and proposed changes read-only with respect to AWS and production."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Сделай read-only audit worker-кода. Он получает job, сразу пишет state='completed' и ack, а потом вызывает grantRefund(). Автор говорит, что это безопасно: completed не даст другому worker повторить refund. Проверь state machine и все crash points, предложи минимальный root-cause fix, bounded retries, operator recovery и executable tests. Код и production не меняй.",
+      "expected_output": "A read-only audit that identifies completion-before-effect as a job-loss bug, restores effect-before-completion with idempotent ambiguous-completion recovery, and specifies bounded operational and executable proof without editing code or production.",
+      "files": [],
+      "expectations": [
+        "Identifies the root cause: completion/ack before the durable business effect creates silent job loss on a crash, rather than treating the completed marker as safety.",
+        "Provides a complete state/crash matrix including crash after completed-before-refund, during refund, after refund-before-complete, ack loss, lease expiry, retry, quarantine, and reconciliation.",
+        "Makes durable refund effect or its idempotency record commit before conditional completion/ack and handles ambiguous refund completion without promising exactly-once execution.",
+        "Defines stable job, attempt/lease, and refund-effect identities plus legal transitions that reject stale completion.",
+        "Classifies and bounds transient, permanent, poison, and operator-actionable failures with retry elapsed/attempt budgets, backoff, jitter, stuck detection, quarantine, and authorized manual recovery.",
+        "Specifies executable unit/state-machine, integration, and crash-point tests that fail under the current order and pass only when no crash can silently lose or multiply the refund effect.",
+        "Keeps the audit read-only: it neither edits code nor retries, requeues, cancels, drains, or mutates production state."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "После signup endpoint синхронно вызывает email provider. Его p99 — 4 секунды при request budget 500 ms, поэтому welcome email хотим вынести в уже установленную PostgreSQL-backed queue. User и job могут коммититься в одной БД; повторная отправка одного welcome email нежелательна. Предложи минимальный design и executable tests, код и production не меняй. Не делай общий production-readiness review.",
+      "expected_output": "A narrow design-only answer that chooses the durable-job acceptance boundary, uses the existing PostgreSQL queue and one business-effect identity, covers only the relevant enqueue/claim/effect/completion crash points, and avoids unrelated scheduling, backfill, drain, and broad operational machinery.",
+      "files": [],
+      "expectations": [
+        "Uses the design branch, labels SQL or pseudocode as proposed, and keeps code and production unchanged.",
+        "Commits the user and job acceptance in one PostgreSQL transaction and names the caller-visible accepted response.",
+        "Uses a stable welcome-email business-effect key and handles effect-before-complete ambiguity without promising exactly-once execution.",
+        "Provides a focused crash matrix and runnable PostgreSQL/multi-worker tests for enqueue rollback, overlapping attempts, effect-before-complete, and stale completion.",
+        "Keeps the answer narrow: it does not invent civil scheduling, DST, long-running checkpoints, backfill, deploy drain, payload migration, or a full production-readiness program."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Amazon SQS visibility timeout — 30 секунд, обработчик welcome email обычно работает 45 секунд, renewal нет. Иногда письмо уходит дважды. Просто объясни root cause и дай самый маленький fix design с одной проверкой; AWS, код и production не меняй.",
+      "expected_output": "A concise read-only diagnosis that ties duplicate attempts to visibility expiry, adds renewal plus a stable email-effect key, and proposes one focused overlapping-consumer check without expanding into unrelated durable-job concerns.",
+      "files": [],
+      "expectations": [
+        "Identifies visibility expiry before handler completion as the cause of overlapping attempts and notes that SQS may still redeliver duplicates.",
+        "Proposes either initial visibility above the measured runtime with headroom or renewal before expiry, plus a stable welcome-email effect key; the receipt handle is attempt identity rather than business identity.",
+        "Proposes one focused two-consumer real-SQS or faithful-emulator check that crosses the original 30-second visibility boundary and asserts one email effect for the stable business key.",
+        "Keeps the audit read-only and does not claim AWS, code, or production changes were made.",
+        "Does not add unrelated scheduling, DST, long-running checkpoint, backfill, deploy, retention, or broad observability design."
+      ]
+    }
+  ]
+}

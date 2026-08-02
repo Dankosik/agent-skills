@@ -1,0 +1,58 @@
+{
+  "skill_name": "postgres-schema-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Спроектируй PostgreSQL-схему для marketplace. Есть продавцы и товары с текущими названием и ценой, покупатели, заказы с несколькими позициями, несколько платежных попыток и несколько отправлений. После покупки изменение товара не должно менять чек: в заказе должны сохраниться название, цена и валюта на момент покупки. Повтор запроса с тем же idempotency key не должен создать второй заказ. Покажи таблицы, связи, ограничения и DDL, но ничего не применяй.",
+      "expected_output": "An invariant-first normalized marketplace model that separates current catalog facts from order snapshots and models line items, payment attempts, shipments, and idempotent order creation with enforceable constraints.",
+      "files": [],
+      "expectations": [
+        "States the row grain and identity for products, orders, order lines, payment attempts, and shipments.",
+        "Preserves historical order facts as explicit snapshots while retaining product references for traceability.",
+        "Models one-to-many and association relationships with foreign keys, cardinality, delete behavior, and business uniqueness.",
+        "Uses exact money and currency semantics and enforces the idempotency key at the correct business scope.",
+        "Proceeds from the supplied contract without asking for already provided information and surfaces only assumptions that materially affect the design.",
+        "Labels the DDL as proposed and includes accepted and rejected validation scenarios without claiming production execution."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Нужна схема multi-tenant SaaS: users могут состоять в нескольких organizations, внутри организации имеют одну роль, projects принадлежат organization, а user можно назначать на projects только своей организации. Email уникален глобально, slug проекта уникален внутри organization. Организации удаляются только после явного закрытия, memberships можно отзывать с сохранением истории. Спроектируй связи и constraints для PostgreSQL.",
+      "expected_output": "A tenant-safe relational model whose keys and constraints prevent cross-organization references, distinguish membership history from current access, and encode global versus tenant-scoped uniqueness.",
+      "files": [],
+      "expectations": [
+        "Models memberships as an association with role and lifecycle rather than putting one organization on users.",
+        "Enforces global email uniqueness and organization-scoped project slug uniqueness with explicit null semantics.",
+        "Uses a composite tenant-aware key or equivalent constraint path that prevents assigning a user to a project through a membership from another organization.",
+        "Defines deletion and revocation semantics that preserve required history without generic soft-delete handwaving.",
+        "Includes cross-tenant and duplicate scenarios that the database or named transaction path must reject."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Спроектируй бронирование переговорных в PostgreSQL 16. У комнаты не может быть двух активных броней с пересекающимся временем; соседние интервалы 10:00–11:00 и 11:00–12:00 допустимы. Бронь хранит автора, временную зону офиса, статус и историю отмены. Нужны DDL и объяснение, где constraint, а где application logic.",
+      "expected_output": "A temporal booking model with explicit instant and civil-time semantics, half-open ranges, database-enforced non-overlap, and a clear boundary between row constraints, cross-row exclusion, and state-transition logic.",
+      "files": [],
+      "expectations": [
+        "Distinguishes the booking instant range from the office time-zone identifier and defines boundary semantics.",
+        "Uses a PostgreSQL range type and exclusion constraint scoped to the room for active non-overlap, or explains a comparably race-safe alternative.",
+        "Defines how cancellation affects overlap enforcement and how cancellation history is retained.",
+        "Maps status and time invariants to constraints or a concurrency-aware transaction owner with tests.",
+        "Includes adjacent, overlapping, cancelled, and concurrent booking scenarios."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Сделай read-only review существующей схемы PostgreSQL. В таблице records лежат customer_name, customer_address, product_ids как CSV, target_type + target_id для связи то с invoice, то с shipment, status и currency внутри jsonb, total как double precision. Одни и те же адреса и статусы расходятся между строками. Объясни причины проблем и предложи нормализованную целевую модель и безопасный порядок миграции. Production не меняй.",
+      "expected_output": "A read-only anomaly analysis that derives functional dependencies and invariants, replaces repeating and polymorphic structures with enforceable relations, chooses exact types, and separates the target model from a bounded migration plan.",
+      "files": [],
+      "expectations": [
+        "Identifies concrete update, insert, delete, type, and referential-integrity anomalies rather than merely labeling the table denormalized.",
+        "Replaces CSV product IDs and unenforceable polymorphic references with typed child or association relations that can carry foreign keys.",
+        "Promotes stable constrained facts from jsonb and replaces approximate money with an exact amount-and-currency model.",
+        "States functional dependencies, lossless decompositions, source-of-truth decisions, and any intentional snapshots.",
+        "Provides an expand/backfill/verify/switch/contract migration sequence while preserving the read-only authority boundary."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "skill_name": "cache-engineering",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "После роста каталога GET /products/:id имеет p95 420 мс и создаёт 9 тысяч одинаковых чтений PostgreSQL в секунду; 1% product_id даёт 65% трафика. Команда добавила cache-aside в Redis с TTL 60 секунд. На 120 pod все экземпляры одновременно промахиваются после expiry, и один hot product вызывает до 300 запросов к database за секунду. Спроектируй production-grade исправление stampede и план доказательства эффекта. Локальный код можно менять, но production Redis, traffic и load test не трогай.",
+      "expected_output": "A freshness-oriented cache-aside design that proves the cache need, specifies complete product keys and bounded freshness, suppresses and fences concurrent fills, protects the origin, and defines comparable local/concurrency/failure proof without unauthorized production changes.",
+      "files": [],
+      "expectations": [
+        "Uses PostgreSQL as authority, records an authority revision or generation for safe publication, and distinguishes a cache hit from truth.",
+        "Defines a complete versioned key including product identity plus every evidenced tenant, locale, currency, channel, authorization, or representation dimension, with collision/isolation tests.",
+        "Defines fresh and maximum-stale age, uses jitter only to spread expiry, and does not present TTL as invalidation or ordering correctness.",
+        "Collapses overlapping fills at the required process/distributed scope, bounds fill and waiter deadlines, fences stale publication, and protects origin concurrency during hot-key expiry.",
+        "Compares before/after p95/p99, throughput, origin/database QPS and load, cache/fill latency, value age, errors, and correctness under a representative expiry burst; hit ratio is not standalone proof.",
+        "Keeps production cache changes, traffic cutover, and load testing behind separate authorization and does not invent a performance improvement."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "PUT /products/42 успешно закоммитил version=118 в PostgreSQL, но Redis DEL вернул timeout, поэтому неизвестно, была ли invalidation применена. Параллельный GET начал читать version=117 до commit и может записать её в cache после DEL. API обещает read-your-writes для автора и не более 10 секунд stale для остальных. Диагностируй race и предложи реализацию/rollout; production flush и bulk invalidation не выполняй.",
+      "expected_output": "A diagnosis of the committed-authority/ambiguous-invalidation race with a generation-fenced convergence design, explicit read-your-writes and staleness behavior, idempotent repair, and a production-safe rollout plan.",
+      "files": [],
+      "expectations": [
+        "Treats PostgreSQL version 118 as authoritative and does not imply that a Redis timeout rolled back or disproved the committed write.",
+        "Models the invalidation timeout as ambiguous, retries only idempotent or generation-guarded work, and includes readback or durable reconciliation.",
+        "Explains the stale in-flight fill after invalidation and prevents version 117 from publishing over version 118 using a revision/generation fence rather than TTL alone.",
+        "Defines the complete key and all dependent variants plus a concrete read-your-writes path for the author and a measured 10-second maximum age for others.",
+        "Tests update-during-fill, timeout-before/after server execution, retry, repair, and degraded cache behavior, then compares latency and origin load without sacrificing correctness.",
+        "Leaves production flush, bulk invalidation, cutover, and load testing unexecuted pending separate authorization."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "GET /catalog/by-slug/new-camera кэширует 404 на 5 минут. Через секунду POST /catalog создаёт объект с этим slug и возвращает 201, но следующие GET продолжают получать cached 404. Нужны contract, исправление и тесты для negative caching в multi-region сервисе. Ничего не purge-ить в production.",
+      "expected_output": "A negative-cache contract that distinguishes authoritative not-found from errors, supersedes every regional/variant negative entry on create, bounds freshness, and proves create-after-404 convergence and failure behavior.",
+      "files": [],
+      "expectations": [
+        "Names the create/read source of truth and caches only an authoritative 404, never a timeout or dependency error as not-found.",
+        "Defines a versioned, canonical slug key with complete tenant, authorization, locale, region, and representation scope where applicable.",
+        "Gives negative entries an explicit TTL/maximum age justified by create propagation and makes successful create invalidate or supersede the exact negative and related variants.",
+        "Handles missed or ambiguous regional invalidation with generation/versioning, durable delivery and reconciliation rather than assuming purge propagation is atomic.",
+        "Includes executable negative-then-create, concurrent GET/create, timeout, regional delivery-loss, tenant-isolation, and rollback tests.",
+        "Requires comparable latency/origin-load evidence and observed stale age, and preserves the production purge authority boundary."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "В multi-tenant SaaS GET /v1/reports/{id} кэшируется по ключу report:{id}. У tenant A и tenant B бывают одинаковые id. Ответ зависит от role, field-level permissions и locale; один пользователь уже увидел название отчёта другого tenant после cache HIT. Проведи read-only diagnosis и предложи безопасный cache contract и migration plan. Production не меняй.",
+      "expected_output": "A read-only isolation incident diagnosis that stops unsafe shared reuse, defines tenant/auth/policy-complete keys or post-cache authorization, and provides a versioned migration and falsification plan without production mutation.",
+      "files": [],
+      "expectations": [
+        "Identifies the incomplete key as a cross-tenant authorization/privacy breach and treats the authoritative report and policy source separately from cached output.",
+        "Defines complete tenant, report, role/policy-version, locale, representation, and serializer namespace dimensions, or caches an authority-independent object and reapplies authorization after retrieval.",
+        "Avoids raw tokens or credentials as key material and defaults uncertain personalized/shared-cache behavior to fail closed, private, no-store, or bypass.",
+        "Defines freshness and invalidation for both report mutations and authorization/policy changes, including ambiguous failure and stale in-flight fills.",
+        "Provides collision, two-tenant/two-role, policy-change, create/update/delete, cold migration, rollback, and cache-outage tests plus observables for isolation failures.",
+        "Keeps diagnosis read-only, requires separate authority for production purge/cutover, and makes no unmeasured latency or load claim."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Redis cache начал timeout-иться, evicted_keys резко вырос, MISS rate поднялся с 8% до 92%. Все 80 API pod fail-open идут в origin; PostgreSQL connections исчерпаны, p99 вырос с 350 мс до 8 секунд и пошли 503. Команда предлагает сразу увеличить cluster, поставить allkeys-lfu и разрешить бесконечные retries. Диагностируй failure chain и составь recovery/fix/proof plan, но не меняй production policy, размер cluster, traffic или database.",
+      "expected_output": "An evidence-backed cache-to-origin amplification diagnosis with bounded degraded mode, origin backpressure, eviction/capacity hypotheses, staged recovery, and representative before/after and failure proof under an explicit production authority boundary.",
+      "files": [],
+      "expectations": [
+        "Connects Redis timeouts/evictions and unbounded fail-open fan-out to origin connection exhaustion and tail latency while retaining measurable competing causes.",
+        "Defines cache and database authority roles, complete key/freshness semantics, and safe stale or fail-closed behavior for correctness- and authorization-sensitive values.",
+        "Bounds cache deadlines, retries/backoff, fallback concurrency, queueing, circuit/shedding behavior, and recovery ramp so cache failure cannot multiply origin load without limit.",
+        "Requires value-size/memory/headroom, hot-key/slot skew, eviction, timeout, retry, origin QPS/concurrency/load, and p95/p99 evidence before choosing resize or LFU.",
+        "Defines representative outage, eviction, cold-start, hot-key, recovery, and rollback tests and compares latency, throughput, origin/database load, correctness, staleness, and errors; hit ratio alone does not pass.",
+        "Treats eviction-policy change, cluster resize, traffic cutover, flush/bulk invalidation, and load tests as separately authorized production actions and does not claim an improvement before a comparable benchmark."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Checkout API имеет p99 900 мс при цели 500 мс. Репрезентативный trace показывает: чтение PostgreSQL занимает p99 6 мс, выполняется один раз на запрос и держит 40 QPS при загрузке database ниже 10%; 780 мс уходит на внешний payment provider. Команда всё равно предлагает Redis cache с TTL 5 минут для результата PostgreSQL и ожидает достичь цели. Проведи read-only design review и скажи, нужен ли cache. Production Redis, database, traffic и load tests не меняй.",
+      "expected_output": "A freshness-oriented no-cache verdict or bounded measurement plan that preserves the supplied target, quantifies the maximum removable origin cost, stops before speculative cache design, and makes no performance claim or unauthorized production change.",
+      "files": [],
+      "expectations": [
+        "Pins the user-visible p99 target, representative trace, PostgreSQL latency/QPS/load, and external-provider cost, and quantifies that the proposed cache cannot remove enough latency to meet the target.",
+        "Treats PostgreSQL as authority only for the measured lookup and finishes with a no-cache verdict or bounded measurement plan instead of inventing a cached value, key, TTL, or invalidation path.",
+        "Stops before key, TTL/freshness, invalidation-race, and degraded-mode design because no cached value was selected, while noting that a remote cache would add correctness, isolation, and failure surface.",
+        "Routes investigation toward the measured external-provider latency while retaining competing causes and does not mislabel hit ratio as evidence of user-visible value.",
+        "Defines the comparable latency and origin-load evidence that would be required before reconsidering caching and makes no before/after performance claim without a candidate and representative benchmark.",
+        "Keeps production cache changes, database changes, traffic cutover, and load testing behind separate authorization and preserves the read-only review boundary."
+      ]
+    }
+  ]
+}
