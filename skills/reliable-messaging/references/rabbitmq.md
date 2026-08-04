@@ -25,6 +25,7 @@ Use this reference only for RabbitMQ-specific choices. Confirm queue type and se
 - Quorum queues support a delivery limit and can dead-letter after repeated delivery. RabbitMQ 4.x applies a default quorum delivery limit, so set and monitor an intentional value rather than inheriting it silently.
 - Dead-lettering is another publish boundary. Quorum queues can provide at-least-once dead-lettering when configured for it; retries can still create duplicates at the target.
 - Redrive from quarantine with original logical identity, a bounded rate, and a fixed consumer/schema version. Expect redriven work to interleave or reorder unless the recovery design isolates it.
+- A quarantine design is not proven until a separate bounded-redrive canary preserves the original identity, leaves an already-applied effect unchanged, applies only the intended repaired item, and stops on the declared business invariant; list this test explicitly rather than folding it into rollout prose.
 - Recovery redeclares topology idempotently after connection recovery and resumes only after publishers have restored confirm tracking and consumers have restored acknowledgement behavior.
 
 ## Signals and security that change the design

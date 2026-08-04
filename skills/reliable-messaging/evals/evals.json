@@ -75,6 +75,32 @@
         "Defines executable crash tests on both sides of the commit, lost acknowledgement, concurrent duplicate, and replay, with observable pass conditions.",
         "Performs no edits, acknowledgements, replay, redrive, or production action and labels the target design and recovery actions as recommendations requiring separate authority."
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Сделай узкий read-only diagnosis. Два разных события одного checkout имеют разные message_id, но общий correlation_id. Consumer использует UNIQUE(tenant_id, correlation_id) как inbox dedup key, поэтому второе событие считается дублем и не применяет business change. Найди причину, предложи минимальную правку контракта и один компактный набор тестов. Не проектируй заново весь broker pipeline и ничего не меняй.",
+      "expected_output": "A concise causal diagnosis that distinguishes correlation from message identity, changes deduplication to the consumer/effect-scoped logical message or stronger business key, identifies recovery for already suppressed events, and proves both duplicate convergence and distinct-message separation without expanding into a full messaging redesign.",
+      "files": [],
+      "expectations": [
+        "Identifies reuse of correlation_id as the deduplication key as the direct cause: correlation groups an interaction and does not identify one logical message or effect.",
+        "Uses a tenant- and consumer/effect-scoped message_id or a stronger immutable business-effect key for atomic inbox/effect uniqueness.",
+        "Requires one test where two distinct message_id values sharing a correlation_id both apply and one concurrent redelivery test where the same logical message applies once.",
+        "Names reconciliation or audited replay for events already suppressed by the bad key and preserves their original logical identities.",
+        "Keeps the response scoped to the affected identity/effect boundary, performs no changes, and does not invent unrelated broker, topology, or operations work."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Один сервис и один PostgreSQL уже владеют welcome-email work. После COMMIT signup нужно асинхронно отправить письмо; независимых consumers, fan-out и исторического replay не требуется. Команда хочет добавить Kafka только ради этой задачи. Выбери минимальный надежный механизм и зафиксируй acceptance/effect contract. Нужен design, production не меняй.",
+      "expected_output": "A minimal design that rejects an unearned broker, atomically records a database-backed job with signup, hands lease/execution detail to durable-background-jobs, and defines caller acceptance and idempotent email effect without producing a ceremonial Kafka architecture.",
+      "files": [],
+      "expectations": [
+        "Rejects Kafka as unearned because one database owns the work and the request supplies no independent fan-out, buffering, or replay requirement.",
+        "Commits signup and one stable database-backed job or outbox-like work record in the same PostgreSQL transaction and returns only after durable acceptance.",
+        "Defines stable job/business-effect identity so retry or crash cannot send an unbounded duplicate email, and acknowledges that provider-side ambiguity may require idempotency or reconciliation.",
+        "Routes detailed lease, worker, and retry mechanics to durable-background-jobs while retaining the acceptance and handoff contract.",
+        "Provides a compact proof for rollback, crash after acceptance, and duplicate attempt without designing unused broker topology."
+      ]
     }
   ]
 }
