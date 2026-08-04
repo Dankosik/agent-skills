@@ -60,6 +60,19 @@
         "Proposes a bounded application-side probe using aligned request, queue, pool, and database timestamps or traces.",
         "Recommends no PostgreSQL tuning unless new evidence moves the bottleneck into the database."
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Сделай узкую read-only диагностику одного плана PostgreSQL 16. В EXPLAIN ANALYZE join оценён в 120 строк, а фактически даёт 1.4 млн; расхождение начинается после фильтров tenant_id и status. По отдельности оба столбца выглядят селективными, но в данных они сильно коррелируют; extended statistics нет. CPU, locks и I/O saturation не наблюдаются. Нужны причина и ровно один минимальный эксперимент, который подтвердит или опровергнет её. Ничего в production не меняй и не составляй общий план оптимизации кластера.",
+      "expected_output": "A compact plan-misestimation diagnosis that attributes the earliest cardinality error to the tenant/status correlation hypothesis and proposes exactly one safe controlled extended-statistics experiment with comparable plan evidence, without unrelated tuning.",
+      "files": [],
+      "expectations": [
+        "Identifies the earliest 120-versus-1.4-million cardinality error as the decisive evidence and treats tenant/status correlation as a falsifiable hypothesis rather than a proven fact.",
+        "Uses the absence of CPU, lock, and I/O saturation to keep broader resource explanations secondary without claiming they are universally impossible.",
+        "Proposes exactly one bounded non-production or otherwise authorized experiment using suitable extended statistics plus ANALYZE and a before/after plan comparison on representative parameters.",
+        "Defines falsification through estimate accuracy and plan/work movement, while preserving result correctness and noting collection/build cost.",
+        "Does not recommend an index, global planner settings, hardware, partitioning, or production DDL before the experiment supports the cause, and keeps production unchanged."
+      ]
     }
   ]
 }
