@@ -71,6 +71,20 @@
         "Separates confirmed code facts from missing provider guarantees and leaves readiness not ready until contracts and behavioral failure tests exist; static validation is not presented as runtime proof.",
         "Prioritizes the retry middleware and affected boundary stages; does not invent webhook, migration, database, or rollout sections that do not change the review verdict."
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Сделай узкий read-only review только GET /inventory/{sku}. Операция не имеет side effects. Общий deadline запроса — 800 мс, но текущий client на каждый attempt создаёт новый timeout 2 секунды и трижды повторяет 429, игнорируя Retry-After. Provider документирует Retry-After в секундах и quota per tenant. Дай только причину, минимальную безопасную policy и один executable test. Код не меняй, provider не вызывай; не проектируй OAuth, webhooks, reconciliation, database schema или rollout.",
+      "expected_output": "A compact read-only diagnosis of the unbounded per-attempt timeout and incorrect 429 policy for one side-effect-free GET, with one tenant-scoped bounded correction and exactly one executable test, without unrelated integration architecture.",
+      "files": [],
+      "expectations": [
+        "Preserves read-only authority and does not claim code or provider changes.",
+        "Replaces per-attempt full timeouts with one 800 ms end-to-end monotonic deadline whose remaining budget covers attempts, waits, response reading, and cancellation.",
+        "Treats Retry-After as a no-earlier-than provider signal, makes no retry when the delay cannot fit the remaining budget, and bounds attempts and elapsed retry time.",
+        "Scopes quota/concurrency coordination to the documented tenant boundary rather than using unrelated global or per-request retry pressure.",
+        "Provides exactly one executable focused test that proves no sleep or attempt crosses the 800 ms deadline, including a Retry-After value beyond the remaining budget.",
+        "Does not add operation identity, ambiguous-side-effect recovery, OAuth, webhook, reconciliation, schema, migration, or rollout material that cannot change this GET-policy verdict."
+      ]
     }
   ]
 }

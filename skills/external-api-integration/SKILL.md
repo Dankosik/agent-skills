@@ -13,7 +13,16 @@ The boundary process is:
 
 An HTTP client is only one part of this process. Keep the same operation identity and evidence across every stage.
 
-Apply the full boundary chain before claiming production readiness. For a scoped review or diagnosis, inspect the affected stages and their dependencies, then name the global-criterion fields that remain unproven.
+Choose depth from the requested decision:
+
+- Trace the full chain for a new side-effecting integration, production-readiness claim, provider migration, replay, or recovery redesign.
+- For a scoped review, diagnosis, or correction, start at the affected stage and load only dependencies that can change its verdict or make the correction unsafe.
+- A read-only or side-effect-free operation does not need invented operation identity, callback, reconciliation, migration, or rollout work. State only the gaps that block its requested claim.
+- Honor an explicitly requested artifact or test count. Add another item only when omission would make the result unsafe.
+
+The final readiness check below governs the stages actually in scope; it is not a requirement to reproduce every stage as a report section.
+
+For a multi-stage side-effecting design, make the boundary auditable before explaining mechanisms: separate **documented or observed provider guarantees**, **local decisions/invariants**, **inferences**, and **unknown gaps**. Include a compact row for each external effect with its stable identity, caller/provider deadline, durable acceptance point, ambiguous-outcome resolution, and current authority state. This prevents a locally chosen recovery rule from being presented as provider fact.
 
 ## Authority and ownership
 
@@ -62,8 +71,6 @@ Pin request and callback versions independently where the provider permits. Trea
 
 Use tolerant reading for documented additive fields. Route an unknown required field, state, enum value, signature version, or semantic change to an explicit `incompatible` path with retained evidence and an alert; mapping it to a familiar state would hide contract breakage.
 
-**Completion criterion:** a contract matrix names the source and evidence level for every behavior needed by the operation, the synchronous/asynchronous choice is justified against the caller deadline, and unresolved provider guarantees are explicit design inputs rather than assumptions.
-
 ## 2. Establish request identity
 
 Give each intended external side effect one stable local operation ID before the first attempt. Derive or associate the provider idempotency key with that operation and reuse it only for byte-equivalent or provider-equivalent intent. Persist the canonical intent/hash, provider account and environment, key scope/expiry, attempt records, and provider request/resource IDs needed for later lookup.
@@ -72,15 +79,11 @@ Prevent concurrent workers from creating distinct provider operations for the sa
 
 When the provider lacks a documented idempotency guarantee for the side effect, keep automatic retries disabled once transmission might have begun. Require a provider lookup, reconciliation key, or explicit compensation path before choosing another write.
 
-**Completion criterion:** the same durable operation identity reaches every attempt, callback/poll result, and reconciliation record; key reuse with changed intent fails locally; and a crash before or after transmission cannot silently create a new identity.
-
 ## 3. Execute a bounded attempt
 
 Carry one monotonic end-to-end deadline from the caller or background job through queueing, authentication, DNS/connect/TLS, write, response headers/body, backoff, and parsing. Each attempt receives only the remaining budget, and cancellation reaches the transport and body reader. A reconciliation job may outlive the request, but it has its own deadline and ownership.
 
 Choose retry eligibility from the pinned provider contract, request identity, failure phase, and ability to resolve ambiguity. Bound both attempts and elapsed retry time. Use exponential backoff with jitter to decorrelate callers, honor applicable provider delay signals without exceeding the operation deadline, and constrain concurrency at the provider's quota scope.
-
-**Completion criterion:** one executable test shows attempts, sleeps, token work, and parsing stop within the declared end-to-end deadline; cancellation reaches in-flight I/O; concurrency and retry budgets are finite; and no side effect is retried merely because a status belongs to a broad HTTP class.
 
 ## 4. Classify the outcome
 
@@ -94,23 +97,17 @@ Normalize transport, HTTP, provider-code, authentication, schema, and local pers
 
 Status code alone does not select a state. For side effects, a timeout, connection loss, truncated response, or some server errors can be ambiguous because the provider may have committed before the response was lost. Keep that state non-terminal until provider lookup, callback, or reconciliation resolves it. Preserve the provider request ID, error code, response metadata, attempt phase, and redacted evidence used for the decision.
 
-**Completion criterion:** every transport and documented provider outcome maps to one state with an owner and next action; permanent failures consume no retry budget; and an after-send timeout has a tested path that cannot be reported as a definitive failure or create a duplicate effect.
-
 ## 5. Observe callback or poll completion
 
 Select the cheapest authoritative observation channel the provider actually offers. Use authenticated callbacks for prompt notification, backed by polling or listing when callbacks can be lost. If no callback exists, poll a status resource rather than repeating the original write, and apply its own deadline, cadence, quota, and terminal-state rules.
 
 Join callback and poll results through the local operation identity plus documented provider identifiers. Treat timestamps and delivery order as evidence only to the extent the provider contract guarantees them.
 
-**Completion criterion:** every non-terminal and ambiguous operation has a bounded observation path, every received result can be correlated without payload guessing, and loss, duplication, or reordering of a callback cannot strand or regress the operation.
-
 ## 6. Reconcile to convergence
 
 Run reconciliation independently of the happy path. Select non-terminal, ambiguous, overdue, failed-callback, and drift candidates using a declared lookback and checkpoint. Query provider truth by a documented stable identifier, compare it with local state, and apply only allowed forward transitions or named repairs. Retain unresolved and incompatible cases for operator action.
 
 Measure reconciliation lag, oldest ambiguity, checkpoint age, scanned/resolved/unresolved counts, and drift by state. These signals reveal lost callbacks and false success even when request latency looks healthy.
-
-**Completion criterion:** killing the worker at every checkpoint boundary and dropping callbacks still converges without duplicate side effects or skipped records; each permanent item error is retained with an explicit continue/stop policy; and remaining drift is observable and owned.
 
 ## 7. Prove and roll out the boundary
 
@@ -125,13 +122,13 @@ Observe end-to-end and provider latency distributions, attempt count, retry exha
 
 Roll out with pinned versions, sandbox evidence, a side-effect-free or shadow phase where possible, a tenant/operation canary, quota headroom, alerts, and a kill switch for new work. A provider migration assigns each operation to one writer, preserves identity across routing, drains and reconciles in-flight work and callbacks from both providers, and keeps rollback handlers alive. Rollback stops new routing; it does not erase unresolved external effects.
 
-**Completion criterion:** the smallest executable suite fails on every declared boundary failure, canary stop/rollback thresholds are fixed before rollout, migration ownership prevents accidental dual writes, and fresh evidence shows convergence and guardrail health in the highest authorized environment.
-
 ## Report
 
 Lead with readiness and authority state. Keep facts, provider guarantees, inferences, and untested assumptions separate.
 
 Use the report sections as a menu. Preserve the verdict, decision-changing evidence, material gaps, and next action; omit sections that do not apply to the requested depth.
+
+For a narrow task, prefer `verdict -> affected contract -> cause or decision -> smallest correction -> focused proof -> authority/gap`. Use the full table and rollout sections only when several stages or external effects interact.
 
 ```markdown
 ## Verdict
@@ -154,4 +151,4 @@ Use the report sections as a menu. Preserve the verdict, decision-changing evide
 [adjacent-owner contracts, missing provider evidence, separate authorizations]
 ```
 
-**Global completion criterion:** for every external side effect, identity, deadline, retry eligibility, ambiguous-outcome resolution, reconciliation path, security boundary, observable signal, and executable failure test are defined.
+Before claiming the in-scope boundary ready, check once that: provider guarantees and inferences are separated; synchronous versus asynchronous completion fits the caller deadline; every side effect has stable identity and immutable intent; attempts, cancellation, concurrency, and retry time are bounded; ambiguous outcomes have authoritative observation and convergence; callback or pagination failure cannot skip, duplicate, or regress an effect; security and versions are pinned; and executable failure tests, signals, rollout stops, unresolved work, and separate authorizations are explicit.
