@@ -13,16 +13,22 @@ The boundary process is:
 
 An HTTP client is only one part of this process. Keep the same operation identity and evidence across every stage.
 
-Choose depth from the requested decision:
+## Scope and boundary ledger
 
-- Trace the full chain for a new side-effecting integration, production-readiness claim, provider migration, replay, or recovery redesign.
-- For a scoped review, diagnosis, or correction, start at the affected stage and load only dependencies that can change its verdict or make the correction unsafe.
-- A read-only or side-effect-free operation does not need invented operation identity, callback, reconciliation, migration, or rollout work. State only the gaps that block its requested claim.
-- Honor an explicitly requested artifact or test count. Add another item only when omission would make the result unsafe.
+Match depth to the requested claim:
 
-The final readiness check below governs the stages actually in scope; it is not a requirement to reproduce every stage as a report section.
+- For a whole side-effecting flow, production-readiness claim, provider migration, replay, or recovery redesign, trace the full boundary chain.
+- For a scoped review, diagnosis, or correction, trace the affected stage and the dependencies that can change its verdict or safety.
+- For a side-effect-free operation, start with the provider contract, bounded attempt, outcome, and focused proof; add another stage only when it changes the requested claim.
 
-For a multi-stage side-effecting design, make the boundary auditable before explaining mechanisms: separate **documented or observed provider guarantees**, **local decisions/invariants**, **inferences**, and **unknown gaps**. Include a compact row for each external effect with its stable identity, caller/provider deadline, durable acceptance point, ambiguous-outcome resolution, and current authority state. This prevents a locally chosen recovery rule from being presented as provider fact.
+Respect explicit output and test limits. Expand only to close a safety-critical gap, and name that gap. Apply the final readiness gate to every stage in scope; report only evidence that supports the requested decision.
+
+For multi-stage side-effecting work, create one boundary ledger before explaining mechanisms:
+
+| Effect or sync | Provider evidence | Local invariant | Identity/checkpoint | Deadline/acceptance | Ambiguity/recovery | Inference or gap | Authority |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+Keep documented or observed provider guarantees, local decisions, inferences, and unknown gaps in their own columns. This prevents a locally chosen recovery rule from being presented as provider fact.
 
 ## Authority and ownership
 
@@ -54,7 +60,7 @@ Define these handoffs when they are relevant; leave their internal design to the
 
 ## 1. Pin the provider contract
 
-Start from current official provider documentation, the configured SDK/version, captured redacted exchanges, and available sandbox evidence. Record for each operation:
+Start from current official provider documentation, the configured SDK/version, captured redacted exchanges, and available sandbox evidence. Populate the boundary ledger for each operation with:
 
 - environment, account/tenant, base URL, endpoint, method, API and SDK version;
 - request and response schemas, required headers, size limits, and documented error codes;
@@ -124,7 +130,7 @@ Roll out with pinned versions, sandbox evidence, a side-effect-free or shadow ph
 
 ## Report
 
-Lead with readiness and authority state. Keep facts, provider guarantees, inferences, and untested assumptions separate.
+Lead with readiness and authority state. Surface the relevant boundary-ledger rows so provider evidence, local invariants, inferences, and gaps remain distinct.
 
 Use the report sections as a menu. Preserve the verdict, decision-changing evidence, material gaps, and next action; omit sections that do not apply to the requested depth.
 
@@ -134,9 +140,8 @@ For a narrow task, prefer `verdict -> affected contract -> cause or decision -> 
 ## Verdict
 [ready/not ready; designed, changed locally, sandbox-tested, or verified live]
 
-## Boundary contract
-| Side effect or sync | Identity | Deadline/retry | Ambiguity/reconcile | Security/version |
-| --- | --- | --- | --- | --- |
+## Boundary ledger
+[relevant rows from the boundary ledger]
 
 ## Outcome and recovery
 [taxonomy, callback/poll path, checkpoint, drift handling]
@@ -151,4 +156,11 @@ For a narrow task, prefer `verdict -> affected contract -> cause or decision -> 
 [adjacent-owner contracts, missing provider evidence, separate authorizations]
 ```
 
-Before claiming the in-scope boundary ready, check once that: provider guarantees and inferences are separated; synchronous versus asynchronous completion fits the caller deadline; every side effect has stable identity and immutable intent; attempts, cancellation, concurrency, and retry time are bounded; ambiguous outcomes have authoritative observation and convergence; callback or pagination failure cannot skip, duplicate, or regress an effect; security and versions are pinned; and executable failure tests, signals, rollout stops, unresolved work, and separate authorizations are explicit.
+Claim the in-scope boundary ready only when every relevant ledger row satisfies:
+
+- **Contract:** provider evidence and inference are distinct, security and versions are pinned, and synchronous versus asynchronous completion fits the caller deadline.
+- **Execution:** every side effect has stable identity and immutable intent; attempts, cancellation, concurrency, and retry time are bounded.
+- **Convergence:** ambiguous outcomes have authoritative observation; callback or pagination failure cannot skip, duplicate, or regress an effect; unresolved work remains visible and owned.
+- **Proof and authority:** executable failure tests, signals, rollout stops, and separate authorizations are explicit.
+
+Otherwise lead with `not ready` and the missing evidence, ownership, or authorization.

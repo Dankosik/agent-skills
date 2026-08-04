@@ -102,6 +102,45 @@
         "Keeps the audit read-only and does not claim AWS, code, or production changes were made.",
         "Does not add unrelated scheduling, DST, long-running checkpoint, backfill, deploy, retention, or broad observability design."
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "У нас самописный Redis-backed worker, точный claim/ack protocol в тикете не описан. После timeout иногда одновременно выполняются два calculateRoyalty, и один royalty ledger получает две записи. Сделай узкую read-only диагностику: отдели известное от предположений, назови минимально недостающие engine facts, предложи самый маленький safe contract и одну исполнимую проверку. Не проектируй всю очередь и не меняй код или production.",
+      "expected_output": "A narrow diagnosis that refuses to import another engine's guarantees, identifies the minimal unknown claim/lease facts, protects one royalty effect across overlapping attempts, and proposes one discriminating real-engine check without inventing a complete queue architecture.",
+      "files": [],
+      "expectations": [
+        "Separates observed facts from assumptions and does not map Redis automatically to PostgreSQL row locks, SQS visibility, or Temporal Activity semantics.",
+        "Names only the engine facts needed to resolve the duplicate boundary, including atomic claim ownership, expiry or liveness, stale-owner completion/ack behavior, server time, and retry/redelivery behavior.",
+        "Uses a stable royalty business-effect identity plus a unique ledger or conditional write so overlapping attempts converge on one royalty entry.",
+        "Proposes one focused real-engine or faithful-harness test that forces claim expiry/overlap, observes two attempts, rejects stale mutation, and asserts one durable royalty ledger entry.",
+        "Keeps the answer narrow and read-only without inventing a full state machine, scheduling, deploy, retention, or production-readiness program."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Temporal Activity обрабатывает видео около двух часов. Она пишет progress в heartbeat details, но heartbeat вызывается только раз в 25 минут при HeartbeatTimeout=5m, поэтому cancellation долго не замечается и Activity иногда стартует заново. Объясни root cause, дай минимальный fix contract и одну настоящую проверку. Workflow, workers и production не меняй; общий Temporal review не нужен.",
+      "expected_output": "A concise Temporal-specific diagnosis that distinguishes heartbeat liveness from durable effects/checkpoints, restores timely heartbeats and cancellation delivery, preserves reentrant Activity effects, and proposes one focused Temporal test without broadening scope.",
+      "files": [],
+      "expectations": [
+        "Attributes the retry and delayed cancellation to heartbeat cadence exceeding HeartbeatTimeout and correctly maps cancellation delivery to Activity heartbeat.",
+        "Distinguishes heartbeat details from an atomic durable checkpoint or external effect and does not promise exactly-once Activity execution.",
+        "Defines a minimal heartbeat cadence with headroom, responsive cancellation boundary, and a stable business-effect or application-checkpoint identity for replay.",
+        "Proposes one focused Temporal SDK time-skipping or local-service test that crosses the old timeout, verifies retry/cancellation behavior, and asserts replay-safe progress or effect convergence.",
+        "Keeps the answer read-only and omits unrelated schedules, DST, backfills, worker versioning, retention, and broad observability."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Команда хочет вынести calculateTaxPreview в background queue 'для масштабирования'. Сейчас это чистая CPU-функция без внешних side effects, p99=8ms, request budget=300ms, результат нужен клиенту до рендера страницы, повторов и расписания нет. Реши, нужен ли durable job, и предложи минимальное решение с одной проверкой. Код и production не меняй.",
+      "expected_output": "A minimal design decision that rejects an unearned durable job, keeps the computation synchronous, states the caller-visible contract and measurement ceiling, and proposes one focused performance check without queue architecture.",
+      "files": [],
+      "expectations": [
+        "Keeps calculateTaxPreview synchronous because the caller needs the result, measured runtime fits the request budget, and no durability, retry, schedule, or recovery need is present.",
+        "Names the caller-visible completion contract and the measured condition that would justify revisiting the decision.",
+        "Proposes one focused benchmark or request-level test that verifies the latency budget and synchronous failure behavior.",
+        "Does not invent queue states, leases, workers, idempotency ledgers, retries, DLQs, schedules, or operational machinery.",
+        "Keeps code and production unchanged and labels the recommendation as design-only."
+      ]
     }
   ]
 }

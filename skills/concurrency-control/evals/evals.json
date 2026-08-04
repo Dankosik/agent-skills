@@ -1,0 +1,80 @@
+{
+  "skill_name": "concurrency-control",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "У нас двойные бронирования слотов. PostgreSQL (read committed), два инстанса сервиса. Код: SELECT считает существующие брони слота, если count == 0 — INSERT. Под нагрузкой в один слот периодически попадают две брони. Диагностируй: покажи ломающий schedule, выбери минимальный механизм, определи путь конфликта для проигравшего (что вернуть клиенту) и дай executable тест, который форсит гонку и падает без фикса. Прод и код не меняй.",
+      "expected_output": "A diagnosis naming the check-then-act schedule under read committed, the weakest fix as a unique or exclusion constraint with a handled conflict surfaced to the caller, and a barrier-forced two-writer test that fails without the mechanism.",
+      "files": [],
+      "expectations": [
+        "Constructs the explicit two-actor schedule — both SELECTs see zero, both INSERT — and names it check-then-act legal under read committed.",
+        "Chooses the weakest sufficient rung: a unique or exclusion constraint arbitrating the insert race, with reasons for rejecting heavier options like FOR UPDATE or serializable.",
+        "Designs the loser path: the constraint violation is handled and surfaced as a conflict response with enough context to re-decide, not blindly retried with stale intent.",
+        "Lists both replicas and request retries as writers and explains why an in-process mutex cannot close the schedule.",
+        "Provides a deterministic test forcing the interleaving with a barrier or injected pause at the check, asserting one booking, and failing when the constraint is removed.",
+        "Adds a real-store stress assertion of the invariant and notes that in-memory fakes do not arbitrate like the real engine.",
+        "Keeps production and code unchanged with the fix labeled proposed."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Спроектируй списание с баланса кошелька: баланс не может уйти в минус, по горячим кошелькам сотни конкурентных списаний в секунду, плюс клиенты ретраят запросы. Сравни атомарный условный UPDATE, optimistic versioning и SELECT FOR UPDATE для этого кейса, выбери минимальный, определи путь конфликта и ретраев, идемпотентность повторов, и докажи инвариант stress-тестом с N писателями.",
+      "expected_output": "A comparison landing on the atomic conditional UPDATE as the weakest closing rung for non-negativity under hot-key contention, idempotent retry composition via stable operation identity, bounded conflict dispositions, and an N-writer real-store stress proof.",
+      "files": [],
+      "expectations": [
+        "Compares the three mechanisms against the hot-key contention profile and picks the atomic conditional UPDATE with checked row count as the weakest rung closing non-negativity.",
+        "Explains why optimistic versioning thrashes on hot keys and names the conditions under which FOR UPDATE would be justified instead.",
+        "Separates the balance invariant from effect identity: client retries carry a stable operation identity so a retried debit cannot double-spend.",
+        "Distinguishes the insufficient-funds outcome from a concurrency conflict and bounds any retries with attempts, time, and jitter.",
+        "Addresses the aggregate invariant if a ledger is introduced — balance matches entries — and names the mechanism guarding it.",
+        "Provides a stress proof with N concurrent writers plus injected retries at the real store, asserting no negative balance and one effect per operation identity.",
+        "States the assumed isolation level and the residual windows of the chosen design."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Ревью: коллега обернул генерацию месячного инвойса в Redis-lock (SET NX EX 30) и говорит, что теперь два воркера точно не сгенерируют инвойс дважды. Воркеры иногда работают по 2-3 минуты из-за медленного PDF. Проверь рассуждение, покажи, где оно ломается, и предложи минимальную корректную схему. Прод не меняй.",
+      "expected_output": "A review refuting lock-as-mutual-exclusion — the 30-second TTL expires during the 2-3 minute run and yields two holders — and requiring correctness from the effect side: a stable per-period invoice effect key with a unique claim, or fencing checked at write time; job mechanics routed to durable-background-jobs.",
+      "files": [],
+      "expectations": [
+        "Constructs the stale-holder schedule: the TTL expires mid-run, a second worker acquires, the first resumes and writes.",
+        "States that a distributed lock is expiring advice rather than mutual exclusion and that raising the TTL or adding renewal only narrows the window.",
+        "Moves correctness to the effect: a stable invoice-period effect key with a unique claim or ledger, or a fencing generation checked at write time.",
+        "Keeps the loser path defined: the second claimant converges on the existing invoice instead of erroring or duplicating.",
+        "Routes the recurring-work mechanics — claims, retries, occurrence identity — to durable-background-jobs while retaining the interleaving analysis.",
+        "Provides a falsifier: pause the first holder past the TTL, let the second run, resume the first, assert a single invoice and a rejected stale write.",
+        "Keeps the review read-only with the fix labeled proposed."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "У нас 4 инстанса сервиса, ежедневный отчёт должен строиться ровно один раз в сутки. Лидер выбирается строкой в PostgreSQL с heartbeat; после failover уже дважды получали два отчёта за день. Спроектируй фикс: fencing, идентичность occurrence, поведение при перекрытии лидеров, и тесты, которые форсят паузу и failover.",
+      "expected_output": "A design that accepts leader overlap as unavoidable and makes effects safe: a monotonic leadership generation fencing conditional writes plus a per-day occurrence identity with a unique claim, sized heartbeat and expiry windows, and forced-pause and failover tests proving one report.",
+      "files": [],
+      "expectations": [
+        "States that at-most-one-active leadership is unattainable across pauses and failover and reframes the goal as fenced or idempotent effects under overlap.",
+        "Introduces a monotonic leadership generation with conditional writes so a resumed stale leader is rejected at the effect.",
+        "Gives each daily occurrence a stable identity with a unique claim so two overlapping leaders converge on one report.",
+        "Sizes heartbeat and expiry from measured runtime and pause tails and states the resulting overlap window explicitly.",
+        "Covers the crash-while-leading and pause-resume windows with guards and operator-visible signals.",
+        "Provides tests that force the overlap: pause the old leader past expiry, promote a new one, resume the old, assert one report and a rejected stale write.",
+        "Routes recurring-schedule mechanics to durable-background-jobs where relevant instead of redesigning the queue."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Инвариант: в смене всегда остаётся минимум один дежурный. Код перед снятием с дежурства проверяет COUNT дежурных > 1 и делает UPDATE своей строки. Под read committed два человека сняли себя одновременно, и смена осталась пустой. Объясни аномалию, почему это не лечится уникальным constraint, сравни варианты (serializable + retry, FOR UPDATE на якорной строке, материализованный инвариант) и выбери минимальный. Дай deterministic тест.",
+      "expected_output": "An explanation of write skew — overlapping predicate reads followed by disjoint writes, legal under read committed and snapshot levels — a comparison of serializable-with-retry, anchor-row locking, and a materialized invariant row, a justified weakest choice, and a deterministic two-actor proof.",
+      "files": [],
+      "expectations": [
+        "Names the anomaly write skew: both transactions read an overlapping predicate and write disjoint rows, so no single-row mechanism triggers.",
+        "Explains why a unique constraint cannot express a cross-row minimum invariant.",
+        "Compares serializable isolation with serialization-failure retries, pessimistic locking of an anchor row, and a materialized counter or invariant row with a conditional update.",
+        "Picks the weakest mechanism for the stated load with reasons for rejecting the others, and defines the conflict and retry path for losers.",
+        "States the isolation level each option assumes and the residual anomalies it admits.",
+        "Provides a deterministic proof forcing the overlapping-read schedule that fails without the mechanism and passes with it.",
+        "Routes durable constraint modeling beyond the race to postgres-schema-design and keeps scope on the interleaving."
+      ]
+    }
+  ]
+}

@@ -9,29 +9,29 @@ Design from **forces**, not from a catalog:
 
 `requirements -> forces -> estimates -> simplest topology -> contracts -> failure model -> evolution -> proof`
 
-Every component and edge must pay for its complexity by satisfying a named requirement or constraint. A pattern is a candidate response to forces, not a default architecture.
+Every component, edge, and pattern is **earned** by a named requirement or constraint. The strongest design is the simplest topology whose contracts survive the stated load, failures, and evolution.
 
-## Run contract
+## Choose the depth
 
-Reuse supplied evidence and settled decisions; inspect only what can change the design. Read only reference branches whose stated conditions match the current forces.
+Begin at the requested decision and follow only branches that can change its verdict or make the result unsafe. Reuse supplied evidence and settled decisions.
 
-Choose depth from the requested decision:
+- **End-to-end design, readiness, migration, or material guarantee change:** trace the full in-scope chain from forces through proof.
+- **Narrow review, diagnosis, or correction:** stay on the affected journey and its decision-changing dependencies; leave unrelated capacity, topology, migration, and failure work out of scope.
+- **Unmet need for distribution:** keep the current deployable, store, or synchronous path and name the measurable condition that would justify the next boundary.
 
-- For a new end-to-end design, production-readiness claim, cross-component migration, or material availability/consistency change, trace the full in-scope chain from forces through proof.
-- For a narrow review, diagnosis, or correction, start at the affected journey and load only the steps and references that can change its verdict or make the correction unsafe. Do not manufacture capacity, topology, migration, or failure work unrelated to that boundary.
-- When the simplest answer is to keep the current deployable, store, or synchronous path, say so and name the evidence that would justify distributing it later.
+Preserve unresolved inputs as labelled assumptions, variables, or gaps. The sections below are a causal map, not mandatory report headings.
 
-The completion criteria below are checks for sections actually used, not mandatory report headings. Preserve unresolved fields as explicit gaps; do not fill them with ceremonial architecture.
+## Authority and evidence
 
-- For design, review, diagnosis, or planning, inspect available requirements, code, schemas, diagrams, telemetry, incidents, and deployment artifacts; preserve repository, infrastructure, and production state.
-- For build or change requests, make in-scope local changes and run safe, non-destructive validation.
-- Treat provisioning, deployment, traffic changes, failover, data movement, production load or fault tests, credential changes, and destructive actions as separate production actions requiring explicit authorization. Keep an authorized target and its limits exact, then verify it with fresh readback.
+For review, diagnosis, design, or planning, inspect available requirements, code, schemas, diagrams, telemetry, incidents, and deployment artifacts while preserving state. For build or change requests, make in-scope local changes and run non-destructive validation.
 
-Continue safe, in-scope inspection, local edits, and validation without pausing for routine approval. Ask only when two plausible meanings materially change identity, money, consistency, availability, security, data residency, or an irreversible boundary; otherwise continue with labelled assumptions. Verify material provider-, product-, version-, and pattern-specific claims against current primary documentation, and separate sourced facts from inference. Keep proposed, validated locally, deployed, and verified live states distinct.
+Provisioning, deployment, traffic or failover changes, data movement, production load or fault tests, credential changes, and destructive actions require explicit authorization for the exact target and bounds. Verify an authorized production action with fresh readback.
 
-Stop when the requested artifact and applicable completion criteria are satisfied, or when a concrete blocker or authorization boundary is reached. Name the exact missing evidence, decision, or next action rather than expanding the architecture speculatively.
+Check material provider-, product-, version-, and pattern-specific claims against current primary documentation. Separate facts from inference, and keep proposed, validated locally, deployed, and verified live states distinct.
 
-This skill owns system composition and cross-component contracts. Hand detailed mechanism work to the matching skill while retaining the end-to-end requirement:
+Stop when the requested artifact meets its applicable criteria or a concrete blocker or authorization boundary is reached. Name the exact missing evidence, decision, or next action.
+
+This skill owns system composition and cross-component contracts. Hand detailed mechanism work to the matching skill while retaining the end-to-end requirement. When that deep dive is a real next step, record `<skill> -> unresolved question or evidence` in the output; omit ceremonial handoffs that change no decision.
 
 | Concern | Handoff |
 | --- | --- |
@@ -53,13 +53,13 @@ Turn the request, supplied evidence, and settled decisions into:
 - the requested decision or artifact and the evidence needed to call it ready;
 - facts, inferences, assumptions, and unresolved decisions.
 
-Use precise targets where the user supplied them. When a target is missing, preserve it as a variable or bounded assumption rather than inventing precision.
+Use supplied targets exactly. Preserve a missing target as a variable or bounded assumption.
 
-When two supplied requirements conflict, do not silently weaken one with the other. State the conflict and either keep the stricter safety contract as the conservative assumption or present explicit alternatives with the decision needed to choose between them.
+Surface conflicting requirements. Keep the stricter safety contract as the conservative assumption, or present the alternatives and the decision needed to choose.
 
 ## 2. Quantify the load envelope
 
-For every design-driving path, estimate the dimensions that can change the topology:
+For each design-driving path, estimate only dimensions that can change the topology:
 
 - average, peak, and burst request or event rate;
 - service time and concurrent in-flight work;
@@ -70,9 +70,11 @@ For every design-driving path, estimate the dimensions that can change the topol
 
 Show formulas, units, ranges, and sensitivity to the largest assumptions. Read [references/capacity-and-topology.md](references/capacity-and-topology.md) when capacity, decomposition, sharding, cells, or independent scaling may affect the design.
 
+Keep rate, payload, fan-out, retention, retry amplification, and sustainable service rate independent until evidence relates them. Do not silently collapse several intents, deliveries, or effects into one source operation.
+
 ## 3. Draw the simplest viable topology
 
-Start from the current system, or from one deployable and one authoritative store for a greenfield design. Add a network boundary, copy, queue, cache, partition, service, region, or control plane only when a force requires independent scaling, failure containment, data or trust ownership, deployment lifecycle, geographic locality, or a different consistency or latency contract.
+Start from the current system, or from one deployable and one authoritative store for a greenfield design. Earn each added network boundary, copy, queue, cache, partition, service, region, or control plane through independent scaling, failure containment, data or trust ownership, deployment lifecycle, geographic locality, or a different consistency or latency contract.
 
 For every component, record:
 
@@ -109,7 +111,7 @@ Include slow and partial failures, exhausted resources, retry amplification, bac
 
 ## 6. Compare alternatives and earn patterns
 
-When the choice is material, compare the simplest viable design with its strongest practical alternative; for a review, compare the current design with the smallest viable correction. Evaluate both against requirements, capacity, consistency, failure containment, operational burden, security, cost, delivery time, and future change. If no alternative could change the decision, record that and end the comparison.
+When the choice is material, compare the simplest viable design with its strongest practical alternative; for a review, compare the current design with the smallest viable correction. Evaluate both against requirements, capacity, consistency, failure containment, operational burden, security, cost, delivery time, and future change. End the comparison when no practical alternative could change the decision.
 
 Record each material pattern decision as:
 
@@ -124,49 +126,18 @@ Read [references/evolution-and-multi-region.md](references/evolution-and-multi-r
 Define:
 
 - version compatibility and coexistence of old and new components;
-- data migration, backfill, validation, cutover, rollback or roll-forward, and cleanup;
+- data migration, backfill, validation, cutover, and cleanup, with an owner and removal condition for every temporary writer, adapter, flag, shadow copy, job, and compatibility path;
+- the last rollback-safe state, the first new-only or irreversible write, who may cross that boundary, and the roll-forward or repair path after it;
 - deployment order, blast-radius controls, and abort signals;
-- load, consistency, fault, recovery, security, and restore tests;
+- load, consistency, fault, recovery, security, and restore tests, including a lost response after each authoritative commit and retry with the same logical identity;
 - production signals that prove SLOs and reveal saturation or divergence.
 
 Map each high-risk assumption to current evidence or to a named validation with environment, workload, expected observation, stopping rule, and owner.
 
 ## 8. Report the design
 
-Lead with the verdict. Preserve the requirements, decisions, evidence, material caveats, and next action; trim introductions, repetition, generic pattern explanations, and optional background first. Keep facts separate from inference. Include a Mermaid diagram when three or more components or failure domains interact. Use this template as a menu and omit empty sections:
+Lead with the verdict. Preserve the requirements, decisions, evidence, material caveats, and next action; trim introductions, repetition, generic pattern explanations, and optional background first. Keep facts separate from inference.
 
-For a narrow task, prefer the compact interface: `verdict -> affected contract -> cause or decision -> smallest correction -> proof/gap`. Use the fuller template only when several components, guarantees, or rollout states interact.
+For a narrow task, use the compact interface: `verdict -> affected contract -> cause or decision -> smallest correction -> proof/gap`.
 
-```markdown
-## Verdict
-[Recommended design, boundary, readiness state, and decisive forces]
-
-## Requirements and assumptions
-| Item | Target or assumption | Evidence/status |
-| --- | --- | --- |
-
-## Capacity envelope
-| Flow | Peak/burst | Data and fan-out | First ceiling/headroom |
-| --- | --- | --- | --- |
-
-## Architecture
-[Mermaid diagram plus component responsibility and data ownership]
-
-## Interaction and state contracts
-| Edge/flow | Identity and commit | Consistency/ordering | Deadline/backpressure | Recovery |
-| --- | --- | --- | --- | --- |
-
-## Failure and recovery
-[Failure matrix, degraded modes, remaining capacity, RPO/RTO]
-
-## Decisions and tradeoffs
-[Forces, patterns earned, strongest alternative, and falsifiers]
-
-## Evolution and proof
-[Compatibility, migration, rollout, rollback/roll-forward, and tests]
-
-## Handoffs and gaps
-[Dedicated skills, missing evidence, open decisions, and next action]
-```
-
-For a full design or readiness claim, check once at the end that: requirements and conflicts are classified; design-driving paths have numeric envelopes or named missing inputs; every component is justified by a force; stateful flows name authority, commit, guarantees, divergence, and recovery; critical journeys have bounded failure behavior, remaining capacity, signals, and tests; material choices include a practical alternative and falsifier; and high-risk assumptions, mixed-version rollout, rollback or roll-forward, and gaps have evidence or an executable validation plan.
+For any full-chain task—end-to-end design, readiness, migration, or material guarantee change—read [references/reporting.md](references/reporting.md) for the full report interface and completion criterion. Include a Mermaid diagram when three or more components or failure domains interact.

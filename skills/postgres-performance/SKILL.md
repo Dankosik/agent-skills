@@ -5,81 +5,81 @@ description: "PostgreSQL performance optimization and diagnosis through a tight 
 
 # PostgreSQL Performance
 
-The skill is a **tight evidence loop**:
+Use a **tight evidence loop**:
 
-`baseline -> bottleneck -> falsifiable hypothesis -> smallest intervention -> comparable delta`
+`baseline -> bottleneck and source -> falsifiable cause -> smallest intervention -> comparable delta`
 
-Optimization lowers end-to-end workload cost while preserving correctness. Account for writes, tail latency, replicas, and maintenance.
+Choose only the unresolved links needed for the user's decision. Evidence that
+places the constraint outside PostgreSQL is a valid result. Without a baseline,
+return a bounded collection plan instead of settings.
 
-Choose depth from the requested decision. Use the full loop for an optimization, capacity claim, configuration change, or production-readiness decision. For a narrow diagnosis or review, enter at the earliest unresolved link and inspect only evidence that can change the bottleneck verdict or make the recommendation unsafe. When direct evidence places the constraint outside PostgreSQL, stop at that boundary and name the discriminating probe; do not manufacture a database intervention. When no baseline exists, deliver a bounded collection plan rather than settings.
+Optimization lowers end-to-end workload cost while preserving correctness.
+Account for writes, tail latency, replicas, and maintenance when they can change
+the decision.
 
-The final evidence check below applies to the links used; the numbered sections are a causal sequence, not mandatory report headings.
+## Evidence bar
+
+- A diagnosis states the decisive observations, then ranks the leading
+  bottleneck and workload source against the strongest competing explanation.
+- A recommendation connects the smallest intervention to a falsifiable cause
+  and names its cost, failure signal, and rollback.
+- A proven optimization has fresh comparable evidence for the target and
+  protected invariants.
+
+When evidence stops earlier, report the exact missing link and next bounded
+probe. Keep correlation labelled as correlation until a causal probe supports it.
 
 ## Authority
 
-- For answer, review, diagnose, or plan requests, inspect available code, plans, telemetry, and logs; run bounded read-only diagnostics; and report the result. Preserve the database state.
-- For change, fix, or optimize requests, make in-scope local changes and run non-destructive validation without pausing for routine steps. Treat production DDL/DML, configuration changes, restarts, session cancellation, maintenance commands, and load tests as separate production actions requiring explicit authority.
-- When the user authorizes one exact production action, keep that action's target and limits exact. Verify it with a fresh readback.
+- For answer, review, diagnose, or plan requests, preserve database state while
+  inspecting available code, plans, telemetry, logs, and bounded read-only probes.
+- For change, fix, or optimize requests, make in-scope local changes and run
+  non-destructive validation. Production DDL/DML, configuration changes,
+  restarts, session cancellation, maintenance, and load tests each require
+  explicit authority.
+- Keep an exact production authorization exact and verify it with fresh readback.
 
-Ask a question when missing information changes this authority boundary or makes the next probe unsafe. Otherwise proceed with available evidence and label gaps.
+Ask only when missing information changes the authority boundary or makes the
+next probe unsafe. Otherwise proceed, label gaps, and continue safe in-scope work
+until the evidence bar or a concrete blocker is reached.
 
-For change requests, complete the evidence loop while safe in-scope work remains. An authorization boundary or concrete blocker ends the current run with the missing next action named.
+## Frame the decision
 
-## 1. Build a tight baseline
+Pin the user-visible target, protected invariants, environment, workload, time
+window, and one named repeatable baseline. Prefer an application SLO or business
+operation over a generic goal such as lower CPU.
 
-Establish from available code, telemetry, plans, and user context:
+## Attribute the bottleneck and source
 
-- the user-visible goal and protected invariants;
-- PostgreSQL version, provider, topology, and relevant extensions;
-- workload and time window, including recent deploys or data-shape changes;
-- baseline latency distribution, throughput, error rate, and suspected constraint;
-- the allowed environment and action scope.
+Read the relevant section of [references/diagnostics.md](references/diagnostics.md)
+before choosing a live probe or interpreting supplied evidence. For a bounded
+programmatic collection across several independent sources, read
+[references/tool-routing.md](references/tool-routing.md).
 
-Prefer an application SLO or business operation over a generic goal such as “lower CPU.”
+Use time-aligned database, host, and application evidence. Compare deltas within
+one statistics epoch. Rank work by total impact across the window while retaining
+tail evidence, representative bind values, and selectivity. Normalized SQL can
+hide parameter skew; averages can hide tail regressions.
 
-## 2. Build the load profile
+## Test the cause
 
-Read [references/diagnostics.md](references/diagnostics.md) before querying a live database or interpreting a supplied snapshot.
+Test the leading explanation against its strongest competitor with the cheapest
+safe discriminating probe. State the prediction before probing:
 
-Classify the dominant pressure using time-aligned database, host, and application evidence:
+`If <cause>, then <bounded probe> changes <observable>; falsified by <result>.`
 
-- compute;
-- storage or temp I/O;
-- locks, transaction contention, or hot rows;
-- connection or worker saturation;
-- WAL, checkpoint, or replication pressure;
-- vacuum, stale statistics, or table/index growth;
-- demand outside PostgreSQL, such as application queueing or network latency.
+For a target query, inspect the real SQL, schema, indexes, statistics,
+representative parameters, and plan. `EXPLAIN ANALYZE` executes the statement;
+use it only when execution is safe and representative. Change one variable at a
+time.
 
-Use deltas over the incident or benchmark window. Annotate cumulative counters, estimates, and sampled plans with their evidence limits.
+## Choose the smallest intervention
 
-## 3. Find the workload source
+After the evidence supports a cause, read the matching branch in
+[references/interventions.md](references/interventions.md). Verify version- or
+provider-specific behavior against current primary documentation.
 
-Rank work by total impact across the window. Retain dramatic single executions as tail evidence. Combine, where available:
-
-- calls and total/mean execution time;
-- p95/p99 latency from application telemetry;
-- shared reads, temp I/O, WAL, rows, and planning time;
-- wait events, blockers, long transactions, and replication lag;
-- change-point correlation with deploys, traffic, and data distribution.
-
-Preserve representative bind values and selectivities. Normalized SQL can hide parameter skew; averages can hide tail regressions.
-
-## 4. Test the cause
-
-For a target query, inspect the real SQL shape, schema, indexes, statistics, representative parameters, and plan. Use `EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS, FORMAT JSON)` only when execution is safe and representative. `ANALYZE` executes the statement.
-
-Test the leading hypothesis against its strongest competing explanation. Give each a discriminating prediction before probing it. Prefer the probe with the most information and least production cost; change one variable at a time.
-
-Write each hypothesis as: `If <cause>, then <bounded probe> changes <observable>; falsified by <result>.`
-
-## 5. Choose the smallest intervention
-
-Read the matching branch in [references/interventions.md](references/interventions.md).
-
-Verify version- or provider-specific behavior against current primary documentation before relying on it.
-
-Climb this ladder and stop at the first rung that meets the target:
+Stop at the first rung that meets the target:
 
 1. remove unnecessary calls, rows, columns, round trips, or transaction time;
 2. repair query shape, index fit, or planner statistics;
@@ -87,46 +87,29 @@ Climb this ladder and stop at the first rung that meets the target:
 4. tune maintenance or a narrowly evidenced resource setting;
 5. change schema, partitioning, replication, caching, or hardware.
 
-For every candidate, state causal fit, expected metric movement, correctness constraints, write/storage/operational cost, rollout, and rollback. Prefer a session- or table-local experiment to a global setting.
+For the selected candidate, state causal fit, expected metric movement,
+correctness constraints, write/storage/operational cost, rollout, failure signal,
+and rollback. Prefer a session- or table-local experiment to a global setting.
 
-## 6. Prove the delta
+## Prove the delta
 
-Control or record differences in data, parameters, concurrency, cache state, and observation duration. Declare the repetitions or duration before the run, use the same stopping rule before and after, and report the distribution rather than the best run. Measure:
+Use the same data, parameters, concurrency, cache conditions, observation window,
+and stopping rule before and after, or record every difference. Declare duration
+or repetitions before the run and report the distribution rather than the best
+sample.
 
-- correctness and error rate;
-- p50/p95/p99 latency and throughput at the target concurrency;
-- CPU, physical and temp I/O, memory, locks, connections, WAL, and replica lag as relevant;
-- plan shape and estimate accuracy;
-- write amplification, index size, and maintenance cost introduced by the change.
+Measure correctness, the target metric, and the relevant resource and operational
+costs introduced by the change. Include p95 and p99 for latency or capacity
+claims. A single `EXPLAIN ANALYZE` contributes execution evidence; a
+representative application replay or custom `pgbench` script is required for a
+capacity claim.
 
-Use a representative application replay or custom `pgbench` script for throughput claims. A single `EXPLAIN ANALYZE` contributes execution evidence; representative replay establishes capacity.
+## Report
 
-## 7. Report
-
-Lead with the verdict. Include decision-changing evidence, material caveats, and the next action. Summarize raw artifacts by reference. Keep facts separate from inference:
-
-For a narrow diagnosis, prefer `verdict -> decisive evidence -> cause/competitor -> one bounded probe or smallest intervention -> authority/gap`. Use the full template for optimization or readiness work.
-
-```markdown
-## Verdict
-[What is constrained, by how much, and whether the target was met]
-
-## Evidence
-- Baseline/window: ...
-- Load profile and workload source: ...
-- Plan/wait evidence: ...
-
-## Cause
-[Causal finding, confidence, and competing explanation]
-
-## Intervention
-[State: proposed, tested locally, applied, or verified live; exact change, tradeoffs, rollout, rollback]
-
-## Proof
-[Fresh before/after evidence, or “not run” with the exact validation plan]
-
-## Gaps
-[Missing access/data, unverified production behavior, or next bounded probe]
-```
-
-Before claiming an optimization proven, check once that: a named repeatable baseline and protected invariants exist; time-aligned deltas identify the leading bottleneck and strongest competitor; the workload source or capacity ceiling is quantified; a falsifiable probe supports the cause; the selected intervention is the smallest causal fit with costs, failure signal, and rollback; and fresh comparable evidence covers correctness, tails, throughput, relevant resources, and introduced write, WAL, replica, or maintenance cost. Otherwise report the exact missing link instead of implying completion.
+Lead with the verdict. Include only decision-changing evidence, the cause and
+strongest competitor, the intervention or next probe, proof state, material
+caveats, and authority gaps. Distinguish proposed, locally tested, applied, and
+verified-live changes. Separate observation from inference and bound conclusions
+to the measured window. For a narrow diagnosis, use `verdict -> decisive evidence
+-> cause/competitor -> one probe or action -> gap`; expand only when the requested
+decision needs it. Summarize raw artifacts by reference.

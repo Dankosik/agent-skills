@@ -40,7 +40,7 @@
         "Treats timeout and webhook/response reordering as ambiguous distributed outcomes and specifies idempotent handling and reconciliation.",
         "Uses saga or forward recovery with explicit irreversible effects, expiration races, terminal/manual states, and user-visible pending behavior rather than claiming transactional rollback.",
         "Provides a failure matrix and executable crash, duplicate, reorder, expiry, lost-response, and replay tests.",
-        "Routes provider-specific and messaging implementation to external-api-integration and reliable-messaging without losing the end-to-end invariant."
+        "When mechanism-level follow-up is required, names external-api-integration or reliable-messaging together with the unresolved provider or delivery question, without losing the end-to-end invariant."
       ]
     },
     {
@@ -68,7 +68,7 @@
         "Identifies ownerless notification intent/status, message identity, commit and acknowledgement boundaries, ordering, retry multiplication, provider ambiguity, and reconciliation gaps.",
         "Evaluates whether Kafka, Redis, four services, and separate databases each resolve a named force and offers a simpler viable topology for the current evidence.",
         "Provides a failure/overload matrix and bounded load, duplicate, replay, provider-timeout, backlog, isolation, deployment, and recovery proof plan.",
-        "Uses dedicated capability skills as handoffs while preserving one end-to-end notification contract."
+        "Names the matching capability skill and unresolved mechanism question for each required deep dive while preserving one end-to-end notification contract."
       ]
     },
     {
@@ -95,6 +95,21 @@
         "Defines the caller/operator-visible accepted, running, succeeded, and failed behavior without claiming exactly-once execution.",
         "Names measurable upgrade triggers such as sustained window breach, resource saturation, required parallel tenant isolation, or independent fan-out rather than future-proofing by assertion.",
         "Provides a compact rollback/crash/duplicate-file proof and does not add Kafka, coordinator, or worker topology without a named force."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Спроектируй read-only migration существующего checkout: сейчас Orders и Billing живут в одном монолите и одной PostgreSQL-транзакции. Нужно вынести Billing в отдельный сервис со своей БД без простоя. Уже есть at-least-once broker. Старые и новые версии будут сосуществовать до двух недель. Подтвержденный заказ не должен потерять billing intent. До cutover нужен безопасный rollback; после того как новый Billing начал писать состояние, которое старый код не понимает, нужен явный roll-forward boundary. Пик 2 000 orders/s, остальные размеры неизвестны. Дай target contracts, этапы migration/cutover, rollback или roll-forward, failure behavior и proof. Production не меняй.",
+      "expected_output": "A zero-downtime extraction plan with one durable confirmed-order-to-billing-intent commit path, mixed-version compatibility, explicit authority and irreversible boundary, owned cleanup, variable capacity math, ambiguous-outcome recovery, and executable cutover evidence.",
+      "files": [],
+      "expectations": [
+        "Defines the confirmed-order invariant, stable billing identity, authoritative state, and durable commit path without a non-atomic dual write between databases and the broker.",
+        "Provides an expand-compatible mixed-version migration with deployment order, bounded backfill or reconciliation, shadow comparison, and objective cutover criteria.",
+        "Assigns an owner and removal condition to temporary writers, adapters, flags, shadow state, jobs, and legacy compatibility paths.",
+        "Names the last rollback-safe state, the first new-only or irreversible write, who may cross it, and the roll-forward or repair path after it.",
+        "Uses the known 2,000 orders/s peak while preserving payload, fan-out, retention, retry amplification, and sustainable service rate as independent variables for backlog and drain evidence.",
+        "Covers a lost response after each authoritative commit, same-identity retry, duplicate or delayed delivery, broker or Billing outage, replay, abort signals, and user-visible recovery behavior.",
+        "Keeps the design read-only, names any required mechanism-specific skill and unresolved question, and distinguishes proposed proof from deployed or live evidence."
       ]
     }
   ]

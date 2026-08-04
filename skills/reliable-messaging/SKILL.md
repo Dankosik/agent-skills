@@ -81,6 +81,8 @@ Choose deduplication retention from the longest broker retention, redelivery, re
 
 ## Prove the claimed boundary
 
+For a multi-boundary design, readiness review, migration, replay or redrive plan, or a task requesting runnable code or tests, read [references/proof-receipt.md](references/proof-receipt.md) and complete its private receipt before finalizing. Skip it for a single-boundary factual diagnosis unless the user requests a proof artifact.
+
 Choose tests from the guarantee, not from the mechanism’s happy path. At minimum, inject failures on both sides of each in-scope durable commit:
 
 - business commit versus publish intent and broker acceptance versus relay completion;

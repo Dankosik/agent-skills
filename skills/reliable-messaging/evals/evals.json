@@ -101,6 +101,327 @@
         "Routes detailed lease, worker, and retry mechanics to durable-background-jobs while retaining the acceptance and handoff contract.",
         "Provides a compact proof for rollback, crash after acceptance, and duplicate attempt without designing unused broker topology."
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Исправь локально Go handler и верни replacement function плюс ровно один table-driven test; broker и production не меняй. Сейчас код делает ack до транзакции: `func handle(ctx context.Context, m Message) error { if err := broker.Ack(ctx, m); err != nil { return err }; return db.WithTx(ctx, func(tx Tx) error { return applyBusinessChange(ctx, tx, m) }) }`. Message содержит стабильный `MessageID` и `TenantID`. Закрой потерю при crash до COMMIT и дубль при crash или lost ack после COMMIT. Не проектируй заново остальной pipeline.",
+      "expected_output": "A narrow local code fix that atomically commits the business effect with tenant/effect-scoped idempotency before acknowledgement, treats post-commit acknowledgement failure as safe redelivery, and proves the old loss window and duplicate convergence in exactly one compact table-driven test.",
+      "files": [],
+      "expectations": [
+        "Moves broker acknowledgement after a successful database transaction; no path acknowledges before the durable effect commits.",
+        "Atomically records the effect and an inbox or immutable idempotency key scoped by tenant and consumer/effect inside the same transaction.",
+        "Treats acknowledgement failure or process loss after commit as an ambiguous redelivery path that converges on the existing idempotency record.",
+        "Returns one replacement handler and exactly one table-driven test function covering crash/failure before commit and redelivery after commit.",
+        "Keeps the change local to the affected consume boundary and performs no broker, topology, or production action."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Подготовь точный execution runbook для уже авторизованного staging drill: разрешено redrive ровно 20 перечисленных message_id из `payments-dlq-staging` в `payments-staging` со скоростью не выше 2 msg/s. Исходные identity нужно сохранить. Остановиться при любом повторном PSP charge, расхождении ожидаемого business-state count или publish ambiguity, которую нельзя разрешить readback. Разрешение на этот диапазон, environment, destination, velocity и stop conditions уже выдано; production и остальные DLQ не входят в scope. Доступа к broker CLI в этой сессии нет, поэтому ничего не выдумывай и не заявляй выполненным.",
+      "expected_output": "A bounded staging-only redrive runbook that accepts the already supplied authority, performs evidence-driven preflight/canary/rate-limited execution/readback steps, preserves identity and business idempotency, and reports unavailable execution tooling as the only blocker without requesting redundant approval.",
+      "files": [],
+      "expectations": [
+        "Recognizes the supplied authorization as sufficient for the exact staging range and does not ask for the same approval again.",
+        "Preflights the exact 20 identities, source/destination, current business and PSP state, consumer/schema version, capacity, and baseline counts before execution.",
+        "Uses a bounded canary followed by at most 2 messages per second, preserves original logical identity, and stops on each declared invariant or unresolved ambiguity.",
+        "Requires fresh broker and business-state readback after the canary and final range rather than treating a redrive command response as proof.",
+        "States that execution was not performed because the broker tool is unavailable, without expanding authority to production or other messages."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Сделай узкий read-only diagnosis Google Cloud Pub/Sub consumer-а. Subscription включает exactly-once delivery, но handler вызывает AckWithResult и считает успешный ack до COMMIT PostgreSQL-транзакции с business effect. При редком crash между ack и COMMIT сообщение не возвращается, а effect отсутствует. Проверь актуальный официальный контракт Pub/Sub, назови точную границу гарантии, минимальный target и один runnable falsifier. Не проектируй Kafka/RabbitMQ, не меняй код, cloud или production.",
+      "expected_output": "A narrow Pub/Sub diagnosis that verifies the current provider contract, identifies early successful acknowledgement as the loss boundary outside the database effect, moves acknowledgement after an atomic idempotent effect, and stays within the affected consume boundary.",
+      "files": [],
+      "expectations": [
+        "Identifies successful acknowledgement before PostgreSQL commit as the direct permanent-loss window for the business effect.",
+        "Bounds Pub/Sub exactly-once delivery to its documented subscriber acknowledgement region and does not extend it to an external PostgreSQL transaction.",
+        "Proposes the minimal target: atomically commit the effect plus tenant/effect-scoped idempotency, then acknowledge; safe redelivery handles a lost acknowledgement result.",
+        "Provides one runnable falsifier that fails the old ordering by crashing after successful acknowledgement and proves convergence when crashing after database commit before acknowledgement.",
+        "Uses current official Pub/Sub documentation for provider-specific behavior, preserves read-only authority, and avoids unrelated broker or topology design."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Сделай read-only diagnosis публикации ShipmentDispatched. PostgreSQL SERIALIZABLE callback может автоматически повториться после 40001. Внутри callback при status=ready код переводит shipment в dispatched и создаёт event_id=gen_random_uuid(); клиент после timeout повторяет всю операцию. В логах иногда два разных ShipmentDispatched для одного перехода shipment. Нужны минимальный target и один причинный runnable falsifier; код и production не меняй.",
+      "expected_output": "A narrow diagnosis that binds event creation and stable identity to the one real business-state transition, resolves ambiguous commit by durable readback, and proves convergence under transaction and client retries.",
+      "files": [],
+      "expectations": [
+        "Creates an event only when the shipment state transition actually wins.",
+        "Uses one stable logical event identity for the same shipment transition across transaction and client retries.",
+        "Treats a timeout after COMMIT as ambiguous and resolves it by reading durable shipment or event state before creating another event.",
+        "Provides a runnable retry or concurrency falsifier whose durable oracle observes one ShipmentDispatched event for one transition.",
+        "Preserves the requested read-only authority boundary."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Разбери consume boundary платежного worker-а. Он сначала вставляет message_id в inbox и COMMIT-ит, затем вызывает PSP charge без idempotency key. При timeout PSP мог списать деньги, а delivery возвращается. Повтор видит inbox и пропускает работу. Нужен безопасный минимальный contract, recovery для unknown outcome и один falsifier. Это design review: ничего не выполняй.",
+      "expected_output": "A design review that identifies the prematurely completed inbox boundary, gives the PSP call stable effect identity or durable ambiguity handling, and converges retries without claiming an unsupported exactly-once external effect.",
+      "files": [],
+      "expectations": [
+        "Identifies that committing the inbox before the PSP outcome can make a redelivery skip an unapplied or unresolved payment effect.",
+        "Does not promise exactly-once or effectively-once charging without a documented PSP idempotency or status-lookup contract.",
+        "Reuses one stable business-effect key for every attempt when the PSP supports idempotency.",
+        "Persists an unresolved outcome that reconciliation owns when the PSP response is ambiguous.",
+        "Settles message completion only after a terminal durable payment outcome or an explicitly recoverable unresolved state is recorded.",
+        "Provides a causal falsifier for timeout-after-PSP ambiguity and redelivery convergence."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Проверь утверждение команды, что commands для одного account применяются строго по порядку. Command seq=41 временно ошибается, переносится в delay queue, а исходная delivery завершается; seq=42 того же account продолжает основной FIFO и применяется раньше. Дубли имеют разные message_id. Дай узкий verdict, минимальный механизм и один runnable falsifier. Production не меняй.",
+      "expected_output": "A narrow ordering diagnosis that rejects the current strict-FIFO claim, scopes ordering per account, and prevents stale completion with the smallest sequencing or fencing contract while preserving bounded progress.",
+      "files": [],
+      "expectations": [
+        "Rejects the current strict-order guarantee because delayed seq=41 leaves the original FIFO path while seq=42 progresses.",
+        "Names account as the business ordering scope.",
+        "Explains that distinct message identities make duplicate suppression insufficient for stale ordering.",
+        "Uses the smallest per-account sequence, fencing, holdback, or serialized-consumption mechanism that prevents stale application.",
+        "Avoids global serialization across unrelated accounts.",
+        "Names the poison-message versus per-account progress trade-off.",
+        "Provides a runnable falsifier that completes seq=42 before the retried seq=41 and checks the durable final version."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Staging queue зависла, broker CLI доступен. В чате написали: «approval получен, redrive it». Из границ известна только source queue `orders-staging`; message IDs, destination, скорость и stop conditions не указаны. Продумай, что можно сделать сейчас, и не превращай ответ в общий runbook.",
+      "expected_output": "A scoped operational response that performs no mutation under incomplete authority, allows bounded read-only preflight, and asks only for the missing execution bounds without inventing production scope.",
+      "files": [],
+      "expectations": [
+        "Does not execute a redrive or another broker mutation with the supplied incomplete authority.",
+        "Names the missing target message range or identities.",
+        "Names the missing destination.",
+        "Names the missing velocity bound.",
+        "Names the missing stop conditions.",
+        "Separates safe read-only staging preflight from the blocked mutation.",
+        "Does not infer production authority or produce an unrelated full messaging redesign."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Один сервис и одна PostgreSQL уже хранят `cleanup_due_at` в authoritative account row. Cleanup можно восстановить сканированием due rows, повторный запуск безопасен, backlog мал. Команда предлагает добавить Kafka, outbox и отдельную jobs table. Выбери минимальный надёжный boundary и компактное доказательство; нужен только design.",
+      "expected_output": "A minimal design that reuses the existing durable due-state as acceptance, rejects Kafka and a duplicate job record, keeps cleanup idempotent, and leaves detailed worker mechanics outside the messaging answer.",
+      "files": [],
+      "expectations": [
+        "Rejects Kafka because the supplied workload has one durable owner and no fan-out, isolation, smoothing, or replay need.",
+        "Rejects a separate jobs table because cleanup_due_at already represents durable authoritative acceptance.",
+        "Defines stable cleanup identity from the account and intended due-state or generation.",
+        "Requires the cleanup effect to be idempotent or conditionally applied.",
+        "Recovers a crash or ambiguous completion by rereading the authoritative due-state.",
+        "Keeps detailed claim, lease, and worker retry mechanics outside this messaging design unless separately requested.",
+        "Provides compact rollback, crash, and duplicate-attempt proof."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Контроллер вентиляции получает от каждого датчика новое измерение каждые две секунды. Для UI важно только последнее измерение; пропуск отдельных samples допустим, через 20 секунд без обновления значение считается unknown, а после restart можно дождаться следующего sample. Каждое измерение несёт монотонный `device_counter`, но сеть иногда доставляет их повторно и не по порядку. Команда предлагает durable log, DLQ и exactly-once обработку каждого sample. Выбери минимальный механизм и дай компактное доказательство; нужен только design.",
+      "expected_output": "A minimal latest-value design that intentionally avoids durable per-sample messaging, prevents stale observations from replacing newer state, states the freshness/restart contract honestly, and proves convergence under duplicate and out-of-order delivery.",
+      "files": [],
+      "expectations": [
+        "Chooses keyed latest-value replacement instead of durable per-sample delivery.",
+        "Defines the observable contract in terms of the newest accepted device counter and the 20-second unknown threshold.",
+        "Rejects replay and dead-letter processing for samples that have already been superseded.",
+        "Prevents an older device counter from overwriting a newer accepted reading.",
+        "States that restart may temporarily yield unknown rather than inventing a durable-delivery guarantee.",
+        "Provides a runnable duplicate, out-of-order, and restart proof that converges to the newest reading or unknown."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Сервис распространяет на шлюзы полные immutable snapshots конфигурации. У каждого `gateway_id` есть монотонная `revision`; каждый snapshot полностью заменяет предыдущий. Revision 730 повреждена и отправлена в quarantine, после чего пришла валидная revision 731. Команда хочет блокировать все более новые revisions, пока 730 не будет исправлена, потому что называет это strict FIFO. Определи корректную гарантию, минимальный progress mechanism и один причинный тест. Production не меняй.",
+      "expected_output": "A scoped snapshot-ordering design that prefers monotonic latest-valid progress over processing every revision, prevents stale rollback, quarantines malformed input without blocking a superseding full snapshot, and states that delta payloads would require a different contract.",
+      "files": [],
+      "expectations": [
+        "Rejects processing every revision as necessary when each valid payload is a complete replacement snapshot.",
+        "Scopes ordering state independently by gateway_id.",
+        "Applies a valid snapshot only when its revision is greater than the durable applied revision.",
+        "Allows valid revision 731 to progress while malformed revision 730 remains quarantined.",
+        "Treats a later retry of revision 730 as stale and prevents it from rolling state back.",
+        "States that delta payloads with predecessor dependencies would require a different holdback contract.",
+        "Provides a runnable test whose durable oracle ends at revision 731 after quarantine and late retry of revision 730."
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Worker бронирует забор посылки через незнакомый carrier API ParcelForge. Его контракт дан полностью: `CreatePickup` дедуплицирует одинаковый `Request-Key` только 6 часов; локальная работа может возвращаться до 3 дней; успешный HTTP response иногда теряется; `GET /pickups?client_reference=` в первые 10 минут может отвечать `unknown`, затем возвращает `found` или `not_found`; идентификатор callback-attempt меняется при каждой доставке. Спроектируй consume/recovery boundary для timeout и позднего retry, назови честную гарантию и один falsifier. Никаких live-вызовов не делай.",
+      "expected_output": "A provider-contract-aware design that keeps one pickup operation identity across the three-day horizon, does not overextend the six-hour deduplication window, persists ambiguity, uses authoritative lookup before retry, and stops for owned reconciliation when the provider outcome cannot be proved safely.",
+      "files": [],
+      "expectations": [
+        "Identifies that the six-hour provider deduplication window does not cover the three-day local retry horizon.",
+        "Uses one stable pickup operation identity and client_reference instead of callback-attempt identity.",
+        "Persists an unknown outcome after a lost CreatePickup response.",
+        "Performs status lookup before deciding whether the same pickup request may be retried.",
+        "Stops blind automatic creation when the deduplication window has expired and lookup remains inconclusive.",
+        "Does not claim end-to-end exactly-once pickup creation.",
+        "Provides a causal falsifier for lost response, eventual lookup, and retry after the provider deduplication window."
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "Исправь локально TypeScript consumer и верни replacement `applyRestock` плюс ровно один self-contained `node:test` test. Retry одной поставки сохраняет `restockId`, но получает новый `receipt`. Сейчас код:\n\n```ts\ntype Restock = { restockId: string; receipt: string; sku: string; quantity: number };\nasync function applyRestock(m: Restock) {\n  await queue.finish(m.receipt);\n  await db.transaction(async tx => {\n    const first = await tx.markApplied(m.receipt);\n    if (first) await tx.addStock(m.sku, m.quantity);\n  });\n}\n```\n\nСчитай доступными только показанные методы `db.transaction`, `tx.markApplied(key)`, `tx.addStock(sku, quantity)` и `queue.finish(receipt)`. Тест должен использовать replacement function и покрыть rollback до COMMIT, а также потерянный response от `finish` с повторной доставкой. Остальной pipeline и production не меняй.",
+      "expected_output": "A replacement function and one internally consistent runnable node:test test that atomically deduplicates the inventory effect by stable restock identity, finishes the current receipt only after commit, and proves rollback and lost-finish redelivery behavior using the actual replacement code.",
+      "files": [],
+      "expectations": [
+        "Calls queue.finish only after the database transaction commits successfully.",
+        "Uses restockId rather than receipt as the durable deduplication identity.",
+        "Records the deduplication marker and stock increment in the same database transaction.",
+        "Leaves no durable marker or stock increment and does not call finish when the transaction rolls back.",
+        "Converges to one stock increment when finish loses its response and the same restockId is delivered with a new receipt.",
+        "Returns exactly one node:test test function that invokes the replacement applyRestock and asserts durable counts plus finish ordering.",
+        "Keeps the answer local to the supplied consumer boundary without redesigning unrelated pipeline or production topology."
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Сделай узкий read-only diagnosis Redis Streams consumer group для `inventory.reserve`. Producer пишет через `XADD ... MAXLEN ~ 10000`, а четырёхчасовой outage иногда создаёт больше 10 000 записей. Команда считает, что Pending Entries List гарантированно хранит всё до `XACK`, но после outage часть ещё не доставленных IDs исчезает, а для некоторых pending IDs payload уже нельзя прочитать. Workers применяют reservation в PostgreSQL, затем делают `XACK`; stale pending забирает `XAUTOCLAIM`. Назови точную причину, минимальный retention/recovery contract и один runnable falsifier. Проверь актуальную version-specific семантику Redis по первичным источникам; Redis, код и production не меняй.",
+      "expected_output": "A narrow diagnosis that separates stream retention from consumer-group pending metadata, defines a bounded Redis durability and recovery contract, and supplies a causal local falsifier.",
+      "files": [],
+      "expectations": [
+        "Identifies approximate MAXLEN trimming as able to remove stream entries independently of whether a consumer group still needs them, and does not treat the PEL as durable payload storage.",
+        "States the exact Redis acceptance and persistence or replication boundary needed for the claimed durability without extending it to the PostgreSQL reservation effect.",
+        "Derives stream retention and capacity from peak ingress plus outage, detection, and recovery time instead of retaining the magic length 10000.",
+        "Commits the PostgreSQL reservation and durable idempotency record before XACK so a claimed or redelivered entry converges on one effect.",
+        "Uses XAUTOCLAIM only as bounded stale-owner recovery with the original stream and business identity, not as protection against trimming.",
+        "Treats a pending ID whose stream body was trimmed as unrecoverable from the PEL alone and assigns reconciliation from an authoritative source rather than acknowledging invented data.",
+        "Provides one runnable falsifier that reproduces loss with a deliberately undersized stream during consumer outage and proves the target retention envelope preserves the entry through recovery."
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Pricing service один владеет PostgreSQL-таблицей `prices(product_id, value, price_version)` и локальным in-process cache на каждом instance. Каждый read уже дешёво получает текущий `price_version` из PostgreSQL и использует cached value только при точном совпадении версии; miss или mismatch детерминированно перестраивается из той же строки. Restart очищает cache, независимых consumers, fan-out и replay нет. Команда предлагает Kafka, transactional outbox и invalidation topic после каждого price COMMIT. Выбери минимальный надёжный boundary и дай компактное доказательство; нужен только design, production не меняй.",
+      "expected_output": "A proportional design that recognizes the database version check as the correctness boundary and keeps cache invalidation as a disposable local optimization without new messaging infrastructure.",
+      "files": [],
+      "expectations": [
+        "Rejects Kafka, outbox, and an invalidation topic because the authoritative version check already prevents stale cache values from becoming business results.",
+        "Defines successful price publication as the PostgreSQL COMMIT that atomically changes the value and advances price_version.",
+        "Treats every cache entry as disposable derived state and rebuilds it whenever its version differs from the authoritative row.",
+        "Uses a version-aware conditional cache install so a slow rebuild of version N cannot overwrite an already installed version N+1 value.",
+        "Explains why crash after price COMMIT but before local eviction is safe without inventing a durable invalidation delivery guarantee.",
+        "Provides a compact test where a cached version N survives a lost eviction, the database commits N+1, and the next read returns N+1.",
+        "Provides a concurrent test where a delayed version N rebuild completes after N+1 and is rejected rather than replacing the newer cache entry."
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "Верни replacement Go function и ровно один table-driven test для локального outbox finalizer; broker и production не меняй. Claim содержит `RowID`, случайный `ClaimToken` и стабильный `MessageID`; payload immutable. Сейчас после publish вызывается: `func finish(ctx context.Context, c Claim, publishErr error) error { if publishErr != nil { return db.ScheduleRetry(ctx, c.RowID, publishErr) }; return db.MarkPublished(ctx, c.RowID) }`. Race: worker A теряет lease; worker B reclaim-ит row, успешно публикует и ставит `published_at`; затем поздний failure worker A вызывает `ScheduleRetry`, очищает completion и снова делает row due. Обратная ветка: поздний success A приходит уже после нового claim B. Закрой stale-owner mutation минимально, сохрани ambiguous publish semantics и не проектируй заново relay.",
+      "expected_output": "One coherent Go finalizer and one table-driven test that fence stale claim completion without pretending a lost publish result is unambiguous.",
+      "files": [],
+      "expectations": [
+        "Identifies unfenced finalization by RowID as the direct cause that lets an expired owner mutate a successor claim or completed row.",
+        "Makes every retry or published-state mutation conditional on both the matching ClaimToken and the row still being unpublished.",
+        "Prevents a late failure from scheduling retry or clearing completion after a successor has marked the row published.",
+        "Handles a late success that no longer owns the claim by rereading current state: already published is success, otherwise claim loss is reported without mutation.",
+        "Preserves the same logical MessageID and immutable payload across any later publish attempt instead of generating a new identity to resolve ambiguity.",
+        "Returns exactly one replacement finalizer function and exactly one table-driven test function, using a coherent API or clearly labeling missing repository helpers as pseudocode.",
+        "The table-driven test causally covers both late-failure-after-successor-completion and late-success-after-reclaim, asserting that stale tokens cannot change durable row state."
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "Платформа формирует compliance export рабочей области. API коммитит PostgreSQL row `export_requested`, затем кладёт ID в in-process channel. Worker собирает архив из зафиксированной версии данных, загружает его в S3-compatible object store и выставляет `ready`. Сейчас `ready` иногда ставится до подтверждённого результата upload. Потеря export недопустима, повторный архив для одного запроса не должен получить другое содержимое; возможен outage worker-ов до 72 часов, а оператору нужен повторный прогон за последние 30 дней. Сделай readiness review и минимальный production design с доказательством; ничего live не меняй.",
+      "expected_output": "An end-to-end readiness design that closes request-to-work and upload-to-ready gaps, preserves one export identity and immutable source snapshot, bounds retention/replay, assigns recovery ownership, and proves each durable handoff without claiming live execution.",
+      "files": [],
+      "expectations": [
+        "Identifies the post-COMMIT in-process handoff as a permanent-loss window.",
+        "Commits export acceptance and a durable work intent in the same PostgreSQL transaction.",
+        "Uses one stable export identity and immutable source snapshot or manifest across every retry and replay.",
+        "Uses a stable object key and resolves an ambiguous upload by object metadata or checksum readback before uploading different content.",
+        "Marks the export ready only after durable object acceptance and commits work completion only after the ready state is durable.",
+        "Sizes work and artifact retention for the 72-hour outage plus the 30-day replay requirement.",
+        "Names owners and reconciliation evidence for accepted requests, stored objects, and ready rows.",
+        "Provides causal crash tests for request commit before handoff, upload success before ready commit, duplicate execution, and replay."
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Geo-policy service переносит materialized projection зон доступа из legacy append-only journal в новый projection engine. Нужно переиграть последние 14 дней в shadow target, пока live changes продолжают поступать, затем переключить reads. Legacy records имеют `change_ref` и schema revisions 3–5; новый engine принимает schema 5. Часть старых records требует детерминированного преобразования, а один malformed record не должен незаметно остановить migration. Подготовь точный migration/replay plan с критериями cutover и rollback. В этой сессии нет доступа к journal или deployment tools, поэтому ничего не выполняй и не выдумывай команды.",
+      "expected_output": "A bounded shadow-replay migration plan that freezes identities and schema transformation, safely overlaps historical replay with live changes, resumes from durable progress, proves semantic convergence before authorized cutover, and preserves a rollback path without claiming execution.",
+      "files": [],
+      "expectations": [
+        "Pins the source range, cut watermark, accepted schema revisions, and deterministic transformation version before replay.",
+        "Preserves the original change_ref as the logical identity through transformation and replay.",
+        "Keeps the shadow projection isolated from serving reads before cutover.",
+        "Makes overlap between historical replay and live delivery idempotent in the shadow target.",
+        "Persists a replay frontier that can resume after worker failure without skipping or inventing changes.",
+        "Bounds replay velocity from downstream capacity and defines stop conditions for malformed data or semantic drift.",
+        "Requires fresh completeness and semantic reconciliation evidence at the cut watermark before cutover.",
+        "Preserves the legacy read path for rollback and states that cutover was not executed."
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "Исправь локально Python consumer DNS zone changes и верни replacement `apply_change` плюс ровно один self-contained `unittest` test method. Retry одного change сохраняет `change_id`, но получает новый `delivery_handle`. Сейчас код:\n\n```python\ndef apply_change(c):\n    try:\n        with db.transaction() as tx:\n            if tx.remember(c.delivery_handle):\n                tx.replace_zone(c.zone_id, c.zone_version, c.records)\n    finally:\n        feed.advance(c.delivery_handle)\n```\n\nСчитай доступными только показанные методы `db.transaction()`, `tx.remember(key)`, `tx.replace_zone(...)` и `feed.advance(handle)`. Тест должен вызывать replacement function и покрыть rollback до COMMIT и потерянный response от `advance` с повторной delivery. Остальную ingestion topology и production не меняй.",
+      "expected_output": "One coherent Python replacement and one runnable unittest method that atomically deduplicates the zone effect by stable change identity, advances only the current delivery after commit, and proves rollback plus ambiguous-advance redelivery using the actual replacement function.",
+      "files": [],
+      "expectations": [
+        "Calls feed.advance only after the database transaction commits successfully.",
+        "Uses change_id rather than delivery_handle as the durable deduplication identity.",
+        "Records the deduplication marker and zone replacement in the same database transaction.",
+        "Leaves no durable marker or zone effect and does not advance the feed when the transaction rolls back.",
+        "Converges to one zone replacement when advance loses its response and the same change_id is redelivered.",
+        "Advances the current delivery_handle rather than reusing a handle from an earlier attempt.",
+        "Returns exactly one unittest test method that invokes the replacement and uses transactionally coherent fakes.",
+        "Keeps the change local to the supplied consumer boundary."
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "Worker отправляет manifest исследовательского набора в незнакомый сервис CertifyNow для создания неизменяемой seal-записи. Контракт сервиса дан полностью: `SubmitSeal` дедуплицирует одинаковый `Request-Key` 8 часов; локальная delivery может возвращаться 4 дня и каждый раз имеет новый attempt token; успешный HTTP response может потеряться; `GET /seals?client_manifest_ref=` возвращает `pending`, `complete` или `absent`, причём `absent` до 45 минут не является окончательным, а после 45 минут результат terminal; `complete` содержит `seal_id` и digest manifest. Спроектируй consume и recovery boundary, честную гарантию и один причинный falsifier. Live-вызовы запрещены.",
+      "expected_output": "A provider-contract-aware recovery design that keeps one manifest operation identity across the four-day horizon, persists ambiguity, respects non-terminal lookup states, verifies the returned digest before durable completion, and never extends the eight-hour provider deduplication window into an unsupported exactly-once claim.",
+      "files": [],
+      "expectations": [
+        "Identifies that the eight-hour Request-Key window does not cover the four-day delivery horizon.",
+        "Uses one stable seal operation identity, client_manifest_ref, and manifest digest instead of attempt token identity.",
+        "Persists an unresolved outcome after a lost SubmitSeal response.",
+        "Does not treat pending or an early absent lookup as permission to submit another seal.",
+        "Verifies the returned manifest digest and durably records seal_id before completing the source delivery.",
+        "Allows resubmission only after terminal absent and reuses the same logical operation identity.",
+        "Does not claim end-to-end exactly-once seal creation beyond the stated provider contract.",
+        "Provides a causal falsifier for lost response, early absent, later complete, and delivery after the Request-Key window."
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "Сделай узкий read-only diagnosis Azure Service Bus queue `transcript.normalize`. `LockDuration` равен 30 секундам, auto-renew отключён, а handler обычно работает 45–70 секунд: сохраняет нормализованный файл в object storage и только затем вызывает `CompleteMessage`. В логах есть `MessageLockLost`, после чего тот же logical transcript приходит снова. Команда считает это необъяснимым дубликатом уже завершённой работы и предлагает переделать topology через sessions и отдельный poison-flow. Проверь актуальную PeekLock-семантику по официальным источникам, назови точную причину, минимальную correction boundary и один runnable falsifier в disposable namespace. Код, cloud resources и live environment не меняй; весь pipeline не перепроектируй.",
+      "expected_output": "Краткий доказательный диагноз: lease истекает до settlement, поэтому поздний Complete не подтверждает delivery и повтор ожидаем, тогда как уже записанный внешний effect не откатывается. Ответ ограничивается lock renewal/processing bound и идемпотентностью logical transcript, приводит один воспроизводящий тест и соблюдает read-only границу.",
+      "files": [],
+      "expectations": [
+        "Ответ называет истечение PeekLock до CompleteMessage непосредственной причиной MessageLockLost и повторной доставки.",
+        "Ответ явно отделяет settlement Service Bus от уже выполненной записи в object storage и не утверждает, что broker откатывает этот effect.",
+        "Минимальный target ограничен достаточным lock renewal или processing bound и идемпотентностью по стабильной identity transcript без redesign через sessions или poison-flow.",
+        "Приведён ровно один runnable falsifier, который намеренно пережидает короткий lock, фиксирует effect, получает failed settlement и наблюдает повторную delivery в disposable namespace.",
+        "Version-specific PeekLock и settlement claims опираются на актуальные официальные источники Microsoft.",
+        "Ответ остаётся read-only и не заявляет изменений кода, cloud resources или live environment."
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "Лабораторный HTTP-сервис управляет одним микроскопом и запускается ровно в одном процессе. Запрос `POST /calibrations` ждёт результат до 90 секунд; одновременно прибор может выполнять только одну калибровку. Его API принимает стабильный `calibration_id` и при повторе того же ID идемпотентно возвращает тот же результат. После restart серверу разрешено ничего не восстанавливать: клиент повторяет исходный запрос с тем же ID. Фонового backlog, независимых подписчиков и исторического replay нет. Команда предлагает отдельный message bus, durable relay и dead-letter workflow. Выбери минимальный надёжный механизм и дай компактное доказательство; это только design, live system не меняй и не проектируй orchestration platform.",
+      "expected_output": "Минимальный design использует прямой синхронный вызов, process-local semaphore/mutex на один прибор и стабильный calibration_id. Он честно фиксирует границу успеха и retry после ambiguous response, показывает компактный concurrency/restart proof и отвергает ненужную messaging-инфраструктуру.",
+      "files": [],
+      "expectations": [
+        "Ответ отвергает message bus, durable relay и dead-letter workflow как не закрывающие требований этого single-process synchronous boundary.",
+        "Минимальный механизм — прямой вызов API прибора под process-local semaphore или mutex с capacity one.",
+        "Один и тот же calibration_id передаётся прибору при исходной попытке и клиентском retry после restart или потерянного response.",
+        "Гарантия сформулирована честно: HTTP success возвращается после подтверждённого результата, а ambiguous outcome разрешается повтором того же idempotent operation ID.",
+        "Компактное доказательство проверяет отсутствие параллельных калибровок и отсутствие второго physical effect при retry того же calibration_id.",
+        "Ответ остаётся design-only и не расширяется до новой orchestration platform."
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "В on-call канале написали: «можно перемотать Kinesis application `map-tile-indexer` на вчерашнее утро». Больше ничего не зафиксировано: неизвестны AWS account и region, stream ARN, точный UTC timestamp или sequence number, checkpoint backend, допустимый duplicate window, предел объёма/скорости и stop conditions. В этой сессии есть только read-only credentials. Определи, что допустимо сделать сейчас. Не пиши общий recovery runbook, не придумывай команды и не меняй live state.",
+      "expected_output": "Короткий authority-aware ответ проводит stop-line: расплывчатая фраза не разрешает checkpoint mutation. Сейчас допустима только read-only идентификация координат и текущего состояния; для изменения требуется точный scope, replay bounds, duplicate-effect policy и stop conditions. Никаких команд или заявлений о выполнении.",
+      "files": [],
+      "expectations": [
+        "Ответ прямо говорит, что имеющейся фразы недостаточно для rewind или иной checkpoint mutation.",
+        "Сейчас допускается только read-only discovery фактических account, region, stream, application, checkpoint backend и текущей позиции.",
+        "Перед изменением запрашивается точная target coordinate: live scope и однозначный UTC timestamp либо sequence number.",
+        "Перед изменением запрашиваются допустимые replay volume/velocity, duplicate-effect policy и stop conditions.",
+        "Ответ не даёт исполняемых mutation-команд и не превращается в общий recovery runbook.",
+        "Ответ не заявляет, что rewind выполнен, и учитывает read-only credentials."
+      ]
     }
   ]
 }

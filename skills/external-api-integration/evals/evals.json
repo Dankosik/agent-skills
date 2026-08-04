@@ -85,6 +85,90 @@
         "Provides exactly one executable focused test that proves no sleep or attempt crosses the 800 ms deadline, including a Retry-After value beyond the remaining budget.",
         "Does not add operation identity, ambiguous-side-effect recovery, OAuth, webhook, reconciliation, schema, migration, or rollout material that cannot change this GET-policy verdict."
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Сделай узкий read-only review только retry-policy для POST /shipping-labels. Провайдер документирует Idempotency-Key со scope account, retention 6 часов и повтор только с тем же payload; результат можно найти по client_reference. Сейчас после timeout код создаёт новый key и повторяет POST. Ответ дай ровно как: verdict, root cause, две минимальные code changes и один executable test. Код не меняй, provider не вызывай; не добавляй webhook, database, migration или rollout design.",
+      "expected_output": "A compact read-only review that treats the timed-out write as ambiguous, preserves one operation identity and provider key, resolves it through client_reference lookup, and fits exactly two minimal corrections plus one executable failure test without unrelated architecture.",
+      "files": [],
+      "expectations": [
+        "Preserves read-only authority and does not claim code or provider changes.",
+        "Classifies a timeout after possible transmission as ambiguous and requires the documented client_reference lookup before another write.",
+        "Keeps one durable local operation identity, one account-scoped provider key, and the same canonical payload across attempts; it records the six-hour retention as a recovery limit rather than inventing indefinite safety.",
+        "Provides exactly two minimal code changes that repair the shared identity/retry path instead of expanding into a full integration redesign.",
+        "Provides exactly one executable test that loses the response after possible provider acceptance and proves lookup/retry cannot create a second label.",
+        "Keeps documented provider guarantees distinct from local implementation decisions and any remaining unknowns, without adding webhook, database, migration, or rollout sections."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Спроектируй production migration shipping-интеграции с Provider A на Provider B без внешних вызовов. Есть два side effects: create label и cancel label. A документирует idempotency 24 часа per account, lookup по client_reference и duplicate/unordered webhooks. B документирует для create idempotency 7 дней per tenant с тем же payload и lookup по operation_reference; для cancel документация не говорит ни про idempotency, ни про lookup после timeout. Во время cutover остаются in-flight операции и callbacks A. Нужны boundary contract, routing ownership, ambiguous recovery, reconciliation, canary, rollback и proof; бизнес-смысл заказа и database schema оставь соседним владельцам.",
+      "expected_output": "A production migration design with an auditable per-effect boundary ledger, one writer and stable local identity across routing, provider-specific recovery for A and B create, an explicit readiness blocker for B cancel ambiguity, continued handling of A in-flight work, and executable cutover proof without claiming external actions occurred.",
+      "files": [],
+      "expectations": [
+        "Creates separate ledger rows for A create, B create, B cancel, and the relevant callback or reconciliation paths, distinguishing documented provider evidence, local invariants, inferences or gaps, and authority.",
+        "Keeps one stable local operation identity across routing and assigns every operation to exactly one provider writer; retries never become a migration-driven dual write.",
+        "Uses A client_reference and B operation_reference plus their distinct key scopes and retention windows for provider-specific lookup and ambiguous recovery rather than normalizing them into one invented guarantee.",
+        "Marks B cancel not ready for automatic after-send retry because idempotency and lookup are undocumented, and names the provider evidence or compensating path required to unblock it.",
+        "Continues A callback handling and reconciliation until in-flight and ambiguous A work is drained; rollback stops new B routing without erasing B effects or abandoning A callbacks.",
+        "Defines a bounded canary, quota and stop signals, fault tests for loss around both providers and cutover ownership, and separately authorized external activation while leaving business and database internals to their owners."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Сделай read-only design review Go-клиента POST /hotel-holds. Контракт caller менять нельзя: authentication, send, любой допустимый retry и чтение/парсинг ответа должны завершиться внутри одного monotonic deadline 900 мс. Provider документирует Idempotency-Key на 30 минут per hotel для того же body и lookup по reservation_ref; потеря ответа после send неоднозначна. Reconciliation может продолжиться после 900 мс. Ответ: verdict, точный budget, recovery и одна runnable Go test function. Не предлагай 202/pending, код не меняй, provider не вызывай.",
+      "expected_output": "A compact synchronous-boundary review that preserves the fixed 900 ms caller promise, uses one durable operation identity and provider key, hands only unresolved post-deadline ambiguity to reconciliation, and includes runnable commit-then-response-loss proof.",
+      "files": [],
+      "expectations": [
+        "Preserves read-only authority and the fixed synchronous completion contract; it does not evade the 900 ms deadline with 202, pending, or a background send.",
+        "Budgets authentication, send, any eligible same-operation retry, response reading, parsing, and cancellation inside one monotonic 900 ms deadline using remaining time before each blocking stage.",
+        "Creates one durable local hold-operation identity before I/O and binds one hotel-scoped key, reservation_ref, and canonical body to it for at most the documented 30-minute provider window.",
+        "Treats after-send response loss as ambiguous, performs reservation_ref lookup before another write, and hands unresolved work after the synchronous deadline to separately owned reconciliation without claiming synchronous success.",
+        "Provides one runnable Go test function whose fake provider commits the first hold before losing the response and proves lookup or a same-key retry cannot create a second hold.",
+        "Keeps provider guarantees, local policy, remaining lookup-visibility gaps, and external authority distinct without widening into webhook, schema, or migration design."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Сделай узкий read-only review resumable ERP sync. Страница содержит 100 invoices и cursor next_42. Один invoice получает документированный permanent validation error. Текущий worker quarantines его, применяет остальные 99 и сохраняет next_42. Но контракт владельца billing — page-atomic: checkpoint нельзя продвигать, пока вся страница не принята или владелец явно не изменил правило. Дай verdict, root cause, ровно две corrections и один executable crash/restart test. Код не меняй; не проектируй OAuth, webhooks, migration или database schema.",
+      "expected_output": "A narrow review that respects the page-atomic owner contract, prevents checkpoint advancement and partial visibility after a permanent item failure, names the only authority that may allow partial progress, and proves replay safety across a crash.",
+      "files": [],
+      "expectations": [
+        "Preserves read-only authority and classifies the documented validation failure as permanent without retrying it as transport noise.",
+        "Treats unconditional quarantine-plus-next_42 advancement as the root cause because it violates the explicit page-atomic billing contract.",
+        "Keeps the page outcome and checkpoint unchanged until all 100 items are durably accepted; partial progress becomes legal only through an explicit billing-owner contract change and handoff.",
+        "Provides exactly two corrections covering durable page state and atomic effect/checkpoint publication without inventing database schema internals.",
+        "Provides exactly one runnable crash/restart test that fails after item processing but before checkpoint publication and proves replay cannot expose 99 partial items or skip the failed page.",
+        "Keeps the response scoped to sync semantics, ownership, checkpoint, and proof without unrelated authentication, webhook, migration, or rollout material."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Сделай read-only review общего Rust retry Layer, который используют GET catalog, POST invoice, DELETE access-token и OAuth refresh. Сейчас он повторяет любой network error и 4xx/5xx три раза, не передаёт cancellation, ставит новый 2s timeout на attempt и имеет один global semaphore. У callers разные deadlines и provider quota scopes; idempotency для POST/DELETE не зафиксирована. Ответ должен содержать affected-caller matrix, минимальный replacement policy interface, scoped observability и ровно три executable tests. Код и provider state не меняй.",
+      "expected_output": "A caller-inventory-first review that replaces the global method-agnostic retry behavior with operation contracts, bounded deadlines, identity-aware ambiguity handling, scoped quota/auth policy, observable recovery, and three focused runnable tests.",
+      "files": [],
+      "expectations": [
+        "Preserves read-only authority and inventories all four caller/operation classes rather than treating the shared Layer as one uniform HTTP policy.",
+        "The caller matrix distinguishes side effects, known or missing idempotency, caller deadline/cancellation, authentication role, quota scope, ambiguous-outcome observation, and current readiness for GET, POST, DELETE, and refresh.",
+        "Defines a minimal per-operation policy interface instead of another universal status or method table; policy carries exact deadline, retry eligibility, stable identity, quota scope, and ambiguity resolver where relevant.",
+        "Uses one end-to-end remaining budget, propagates cancellation, refuses after-possible-send automatic retries without evidence, and avoids retrying permanent 4xx or repeatedly refreshing the same credential.",
+        "Defines scoped signals for latency/budget, attempts, throttling, ambiguity age, authentication refresh, and reconciliation drift with bounded-cardinality correlation.",
+        "Provides exactly three runnable tests covering deadline/cancellation, commit-then-loss duplicate prevention for a side effect, and combined 429 or repeated-401 exhaustion without widening into webhook, schema, or migration work."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Спроектируй read-only production migration transactional-email integration с Provider A на Provider B, максимум 900 слов. Side effects: send message и add suppression. A документирует idempotency 24 часа per account, lookup по message_ref и duplicate/unordered callbacks. B для send документирует idempotency 7 дней per tenant с тем же payload и lookup по operation_ref; для add suppression у B не документированы idempotency и lookup после timeout. Во время cutover остаются in-flight sends и callbacks A. Нужны readiness, compact decision ledger, one-writer routing, ambiguous recovery, reconciliation, canary, rollback и proof. Внешних вызовов не делай; production activation отдельно не авторизована.",
+      "expected_output": "A concise multi-effect migration design with a complete auditable ledger, provider-specific recovery, a hard blocker for ambiguous B suppression writes, continued A drainage, one-writer rollback, executable proof, and explicit activation authority within 900 words.",
+      "files": [],
+      "expectations": [
+        "Stays within 900 words and leads with a read-only not-ready verdict that separates design from unauthorized sandbox or production activation.",
+        "Renders compact separate ledger rows for A send, B send, B suppression, and callback or reconciliation paths with provider evidence/gaps, local invariant/owner, identity, deadline, recovery/proof, and authority.",
+        "Pins one durable local operation identity and exactly one provider writer across routing; retries, rollback, and callbacks never create migration-driven dual writes.",
+        "Uses A message_ref and B operation_ref with their distinct scopes/windows, while marking B suppression after-send ambiguity unresolved and not automatically retryable until provider evidence or an authorized compensation path exists.",
+        "Keeps A callbacks and reconciliation alive until A in-flight and ambiguous work drains; rollback stops only new B routing and continues observing effects already sent to both providers.",
+        "Defines a bounded canary, quota and duplicate/ambiguity/auth/drift stop signals, runnable fault tests around provider acceptance and cutover ownership, and a separate authorization gate for external activation."
+      ]
     }
   ]
 }

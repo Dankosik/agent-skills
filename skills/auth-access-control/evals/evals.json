@@ -1,0 +1,80 @@
+{
+  "skill_name": "auth-access-control",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Проектируем auth для B2B multi-tenant SaaS: SPA + мобильное приложение, бэкенд из трёх сервисов за gateway. Требование security-команды: после того как админ отключил сотрудника, любой его доступ должен умереть максимум за 60 секунд. Сейчас команда предлагает JWT на 24 часа в localStorage. Определи контракт сессий/токенов: TTL, refresh rotation, ревокация, ротация ключей, что кладём в claims, и докажи выполнимость 60-секундного окна executable-тестами. Production не трогай.",
+      "expected_output": "A revocation-window-first session/token contract that rejects or bounds the 24h JWT design, keeps access-token staleness within the 60-second window or adds server-side checks, defines refresh rotation with reuse detection and key rotation with overlap, minimal claims, and measured deny-path proof.",
+      "files": [],
+      "expectations": [
+        "Derives the mechanism from the 60-second revocation requirement instead of defaulting to long-lived stateless JWTs, and explicitly rejects or bounds the proposed 24-hour token.",
+        "Fills the revocation table for logout, credential compromise, role downgrade, and member removal with the stopping mechanism and the measured maximum delay for each event.",
+        "Defines refresh rotation with reuse detection that revokes the token family, and gives storage guidance for the SPA and mobile clients.",
+        "Specifies issuer, audience, expiry, and signature validation on every hop, kid-based key rotation with overlap, and bounded clock skew.",
+        "Keeps claims minimal, treats downstream-consumed claims as cached facts bounded by the access TTL, and puts no secrets or private data into claims.",
+        "Provides executable deny-path tests including a measured check that a disabled user's access dies within 60 seconds and that refresh reuse revokes the family.",
+        "Labels all artifacts proposed and keeps production unchanged."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Сделай read-only security-аудит куска нашего API (Node/Express, PostgreSQL). GET /api/invoices/:id проверяет только req.user.role === 'member' и достаёт invoice по id. Фоновые джобы ходят в БД под общим superuser-аккаунтом. Логаут просто удаляет cookie на клиенте, JWT живёт 24 часа. tenant_id приходит в теле запроса с фронта. Найди пути эскалации, приоритизируй по severity, предложи минимальные фиксы и executable deny-path тесты. Код не меняй.",
+      "expected_output": "A read-only audit that finds cross-tenant IDOR via the unscoped invoice lookup and client-supplied tenant_id, ambient superuser jobs, and an unrevocable 24-hour session; ranks findings by severity and proposes smallest fixes with deny-path falsifiers.",
+      "files": [],
+      "expectations": [
+        "Identifies the IDOR: a role check without object-level ownership or tenant verification on the invoice id, with a concrete cross-tenant access scenario.",
+        "Flags client-supplied tenant_id as identity input and requires tenant scope derived from the verified principal, with client values at most narrowing within it.",
+        "Flags background jobs running as a shared superuser and requires a narrow service principal or durably captured user context.",
+        "Explains that deleting the cookie is not revocation, states the real logout window as 24 hours, and proposes a mechanism matching an explicitly accepted window.",
+        "Ranks findings with isolation and escalation above revocation latency and hygiene, and separates verified facts from inference.",
+        "Proposes executable deny-path tests: a cross-tenant invoice probe, a job scope probe, and post-logout token use.",
+        "Remains read-only: no code or production changes, all fixes labeled proposed."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Проектируем доступы для продукта типа Google Docs: документы лежат в папках с наследованием прав, есть share-links, команды и внешние гости. Продакт просит просто роли admin/editor/viewer. Выбери модель (RBAC/ABAC/ReBAC или комбинация) от бизнес-правил, определи decide(principal, action, resource, context), где живёт enforcement, и какие falsifiers докажут отсутствие утечек между тенантами и через share-links. Схему таблиц не проектируй — только контракт.",
+      "expected_output": "A rules-first model selection landing on relationship-based access (possibly layered with simple roles), a named decision function with relationship traversal, enforcement at the data-owning layer with default deny, share links as scoped revocable credentials, and cross-tenant plus link falsifiers; storage schema routed to postgres-schema-design.",
+      "files": [],
+      "expectations": [
+        "Writes the access rules as sentences first and derives the model from inheritance and sharing relationships instead of defaulting to flat global roles.",
+        "Defines decide(principal, action, resource, context) with named inputs including relationship or hierarchy traversal and link tokens.",
+        "Places enforcement at the data-owning layer with object-level checks and default deny for actions without an explicit rule.",
+        "Treats share links as principals or credentials with their own lifecycle — scope, expiry, revocation — rather than authorization bypasses.",
+        "Keeps tenant scope derived from the verified principal and mandatory across queries and caches, with guest access explicitly scoped.",
+        "Provides falsifiers: cross-tenant probes, revoked-link probes, inheritance boundary cases, and default-deny on a new action.",
+        "Routes permission storage schema to postgres-schema-design without designing tables."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "У нас 6 Go-микросервисов за API gateway. Gateway кладёт X-User-Id и X-Role в заголовки, внутренние сервисы им верят; сервисы зовут друг друга и напрямую, часть вызовов инициируют кроны без пользователя, а один сервис пересылает полученный access token дальше в третий сервис. Спроектируй передачу identity: когда сервис действует сам, когда on-behalf-of, audience-ограничения, защита от confused deputy, идентичность для кронов и план миграции без даунтайма. Изменений в проде не делай.",
+      "expected_output": "An identity propagation design distinguishing service-as-itself from on-behalf-of, per-hop verification or a proven trust boundary instead of bare headers, audience restriction and token exchange replacing token forwarding, named principals for cron work, and a phased no-downtime migration.",
+      "files": [],
+      "expectations": [
+        "Rejects trusting X-User-Id and X-Role headers unless they originate inside a boundary unauthenticated parties provably cannot reach, and requires per-hop verifiable identity otherwise.",
+        "Distinguishes service-as-itself from on-behalf-of and assigns each call pattern in the described topology to one of the two.",
+        "Replaces raw token forwarding with audience-restricted tokens and token exchange, naming the confused-deputy scenario this prevents.",
+        "Gives cron and background work a named service principal with narrow permissions or durably captured user context instead of ambient trust.",
+        "Provides a phased migration — dual acceptance, verification, enforcement — with reasoning for zero downtime.",
+        "Includes deny-path proofs: a token replayed to the wrong audience is rejected, a forged identity header is rejected, and the cron principal fails out-of-scope actions.",
+        "Keeps production unchanged with all artifacts labeled proposed."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Диагностируй: после смены пароля пользователь остаётся залогинен на других устройствах; после понижения роли человек ещё почти сутки видит админку; отключённые сотрудники иногда продолжают дёргать API своими ключами. Стек: JWT access на 24 часа без refresh, роли зашиты в токен, API-ключи хранятся в БД открытым текстом и без expiry. Найди все окна ревокации, предложи минимальный набор фиксов и measured-доказательства. Прод не трогай.",
+      "expected_output": "A diagnosis attributing every stale-access report to unbounded token and key revocation windows, a filled revocation table with current actual delays, a smallest-fix set (short TTL with rotation or server-side checks, hashed expiring revocable keys), and measured deny-path proofs.",
+      "files": [],
+      "expectations": [
+        "Attributes each reported behavior to its revocation window: 24-hour claims for roles, no session invalidation on password change, and non-expiring keys.",
+        "Fills the event table for logout, compromise, downgrade, and removal with the current actual delays as facts before proposing target windows.",
+        "Proposes the smallest mechanism set matching required windows rather than a full identity-platform rebuild, with each change labeled proposed.",
+        "Requires API keys hashed at rest, scoped, expiring, and revocable, and flags plaintext storage as its own severity item.",
+        "Orders findings by severity and separates verified facts from inference.",
+        "Specifies measured proofs: a revoked key is rejected, a downgraded role loses admin within the stated bound, and a password change kills other sessions within the stated bound.",
+        "Keeps production unchanged."
+      ]
+    }
+  ]
+}

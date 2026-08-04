@@ -1,0 +1,80 @@
+{
+  "skill_name": "production-diagnosis",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Инцидент прямо сейчас: p99 latency у checkout вырос с 400мс до 3с начиная примерно с 14:05, только EU-регион, error rate не изменился. В 13:50 деплоился checkout-svc, в 14:00 включили конфиг-флаг в pricing-svc. Traces есть, но не во всех сервисах; пометровые метрики по хопам есть. Никаких действий в проде без разрешения. Проведи диагностику: что смотреть в каком порядке, mitigation-решение, локализация, falsification и что докажет recovery.",
+      "expected_output": "A mitigation-first live-incident loop: a precise symptom contract using EU-only and flat-error-rate negative space, a ranked change timeline with mechanisms, hop-by-hop self-time localization handling the partial-trace gap, one-variable falsification, authorization-gated actions, and baseline-comparison recovery proof.",
+      "files": [],
+      "expectations": [
+        "Contracts the symptom precisely — metric, baseline delta, EU-only cohort, onset near 14:05, step shape — and uses unaffected regions plus the flat error rate as negative space.",
+        "Weighs a reversible mitigation such as disabling the 14:00 flag or rolling back against continued diagnosis while impact is ongoing, and labels rollback-as-mitigation as distinct from a proven cause.",
+        "Builds the change timeline around 13:50 and 14:00 and requires a mechanism linking each candidate to an EU-only step change before acting on it.",
+        "Localizes by comparing per-hop self-time to downstream time at onset and covers the missing-trace hops with the smallest safe probe instead of guessing.",
+        "Keeps every production action authorization-gated with preflight and readback, and captures perishable evidence before any restart.",
+        "Falsifies with a written prediction and one variable at a time; the accepted cause must explain cohort, onset, shape, and negative space.",
+        "Defines recovery as the contracted metric returning to baseline on a comparable window with a displacement check, and names the detection gap."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Не инцидент, но за три недели пропускная способность ingestion упала примерно на 30%, p95 latency ползёт вверх плавно, без единого момента поломки. Деплоев за это время много, трафик вырос на 10%. Разбери методом: контракт симптома, почему плавная форма меняет список кандидатов, как коррелировать с ростом данных, как найти первый двигатель среди хопов, и когда передать в postgres-performance.",
+      "expected_output": "A post-hoc loop adapted to ramp-shaped regressions: growth-curve candidates prioritized over event candidates, first-mover localization by onset ordering, falsifiable growth mechanisms, and an explicit evidence-package handoff to postgres-performance when the database owns the delta.",
+      "files": [],
+      "expectations": [
+        "Contracts the ramp symptom with baseline windows long enough to show the trend and separates the 10% traffic growth from the 30% capacity loss.",
+        "Explains that the ramp shape shifts candidates from single events to growth curves — data volume, working sets, partitions, queue depths — while still checking the deploy timeline.",
+        "Localizes the earliest mover by ordering per-hop degradation onsets rather than picking the currently loudest component.",
+        "Forms falsifiable predictions for growth mechanisms with observable counters and kills candidates with the cheapest observation first.",
+        "Hands off to postgres-performance with the evidence package — contract, timeline, localization — once the database owns the delta, instead of tuning blind.",
+        "Verifies any fix against the contracted throughput and latency baselines and checks for displacement.",
+        "Names the leading-indicator alert that should have caught the trend before three weeks passed."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Алерты сработали почти во всех сервисах одновременно: везде исчерпаны connection pools, всё красное. Дежурные предлагают рестартить всё подряд и поднять лимиты пулов. Объясни, как в каскаде найти первопричину, кто здесь жертвы, почему массовый рестарт — потеря evidence, и какой порядок действий правильный.",
+      "expected_output": "A cause-versus-victim analysis: queueing backpressure makes upstreams alert loudest, the first mover is found by onset ordering, perishable evidence is captured before restarts, mitigation targets the source, and blanket pool-limit increases are rejected as victim tuning.",
+      "files": [],
+      "expectations": [
+        "Explains the cascade mechanism: one slow dependency backs up queues and exhausts pools upstream, so most alerting services are victims.",
+        "Orders degradation onsets across services to find the first mover instead of following the loudest alert.",
+        "Rejects mass restarts and blanket pool increases as victim tuning that destroys evidence and can amplify load on the source.",
+        "Prescribes capturing perishable state — dumps, queue depths, connection states — before any restart, with production actions authorization-gated.",
+        "Targets mitigation at the source: shed load, isolate, or roll back the first mover's change, stating reversibility.",
+        "Verifies recovery by watching victims drain back to baseline and checking for displacement.",
+        "Names the guard: dependency-level leading indicators that distinguish source saturation from inherited queueing."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Сделай ревью post-mortem заметки коллеги: «Причиной инцидента был Redis — после его рестарта всё восстановилось. Root cause: Redis. Тикет закрыт.» Другого evidence в заметке нет. Оцени цепочку рассуждений, чего не хватает, какие альтернативы не исключены и что нужно, чтобы принять или отклонить вывод.",
+      "expected_output": "A read-only review rejecting recovery-after-restart as causal proof, listing the alternatives a restart also explains, demanding the missing symptom contract and mechanism-level evidence, giving per-link verdicts, and flagging the closed ticket as recurrence risk.",
+      "files": [],
+      "expectations": [
+        "Separates the observed fact — recovery followed the restart — from the causal claim that Redis was the cause, and labels the link unproven.",
+        "Lists plausible alternatives the restart also explains: reset client connections, cleared hot state, or coincident recovery of the true cause.",
+        "Demands mechanism-level evidence: what inside Redis degraded, which metric showed it, and why the symptom shape and cohort match that mechanism.",
+        "Requests the missing symptom contract — onset, shape, cohort, negative space — and a change timeline as prerequisites for any verdict.",
+        "Gives a per-link verdict — carried by evidence, plausible but unproven, or refuted — rather than one global judgment.",
+        "Flags the closed ticket as recurrence risk: no guard, no leading indicator, and undocumented mitigation debt.",
+        "Stays read-only and proposes the smallest follow-up investigation rather than reopening everything."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Каждый час ровно в :00 на ~90 секунд всплеск 500-х на API (около 3% запросов), потом само проходит. Очевидного кандидата нет. Построй метод: как сузить семейство причин, какие минимальные probes поставить, как сформулировать falsifiable предсказание на следующий часовой тик, как исключать по одному кандидату за тик и что считать доказанным фиксом.",
+      "expected_output": "A periodic-symptom method: the clock-aligned shape restricts candidates to scheduled mechanisms, each candidate gets a falsifiable prediction testable at the next tick, smallest probes are placed around the tick, one variable changes per tick, and the fix is proven across multiple consecutive ticks with a leading-indicator guard.",
+      "files": [],
+      "expectations": [
+        "Uses the periodic step shape to restrict candidates to clock-aligned mechanisms and enumerates them: crons, token or certificate refresh, cache TTL herds, scheduled batches, log rotation.",
+        "Correlates the affected 3% cohort with each candidate's blast radius to prune the list before probing.",
+        "Writes a falsifiable prediction per candidate observable at the next hourly tick, ordered by cheapest refutation first.",
+        "Designs the smallest safe probes — a targeted tracing or sampling window around the tick — instead of broad changes.",
+        "Changes one variable per tick, such as shifting one cron or staggering one TTL, so attribution survives.",
+        "Proves the fix across several consecutive ticks against the contracted spike metric rather than one quiet hour.",
+        "Adds the guard: a leading-indicator alert and a jitter or stagger policy for clock-aligned work."
+      ]
+    }
+  ]
+}

@@ -12,8 +12,6 @@ Use this reference to build a bounded load profile. Adapt every query to the ser
 - Start with `EXPLAIN` when execution cost is unknown. `EXPLAIN ANALYZE` executes reads and writes; wrap mutating statements in `BEGIN`/`ROLLBACK` only when triggers, external side effects, and lock impact are understood.
 - Treat `auto_explain.log_analyze`, per-node timing, `track_io_timing`, and broad statement logging as instrumentation with overhead. Sample and time-box them.
 
-When Programmatic Tool Calling is available and evidence spans several independent telemetry, metric, or log tools, read [tool-routing.md](tool-routing.md) before collecting them.
-
 ## Identity and reset boundaries
 
 ```sql
