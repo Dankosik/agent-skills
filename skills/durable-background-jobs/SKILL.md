@@ -131,8 +131,12 @@ Fake time is for deterministic logic; keep one integration test for real claim/r
 
 When the user asks for **executable**, **runnable**, or **real** tests, a checklist is insufficient: include test source or a runnable harness, its setup command, and exact assertions. Run it when the required local engine exists; otherwise label it unrun and name the missing dependency.
 
+Match the proof surface to the request. If the user asks for one focused check, give one executable scenario at the real engine seam that forces the relevant lease or acknowledgement transition; a handler mock or a final effect counter alone does not prove expiry, redelivery, or stale-token behavior. Do not attach the rest of the crash suite unless it can change that result.
+
 **Complete when:** each in-scope invariant and matrix row maps to executable evidence. A build/fix includes fresh passing output; a design/audit labels unrun proof as proposed; an operation includes preflight and readback.
 
 ## Report
 
 Lead with the verdict and include only relevant sections: execution contract, state/crash matrix, capacity/time, recovery/operations, proof, and authority/gaps. Keep facts separate from inference and label each artifact as proposed, implemented locally, tested, authorized live, or verified live.
+
+For a narrow diagnosis, prefer `cause -> smallest safe contract -> one focused proof -> authority/gap`; do not restate the full job lifecycle or unrelated completion criteria.

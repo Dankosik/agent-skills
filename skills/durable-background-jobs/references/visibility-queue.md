@@ -46,6 +46,8 @@ Use the real queue API or an emulator whose visibility behavior is explicitly kn
 
 Assert duplicate attempts, old-handle rejection behavior, the configured DLQ transition, and observable recovery through the [core effect invariant](../SKILL.md#make-effects-reentrant-and-failures-bounded). A mock that invokes the handler once cannot prove visibility behavior.
 
+For the narrow duplicate-after-expiry case, the minimum faithful check waits past the initial visibility, obtains a second receipt handle with another consumer, attempts completion with the stale first handle, and asserts one durable business effect by the stable effect key. Counting provider calls without observing the second receive and receipt-handle transition is not a visibility test.
+
 **Complete when:** the chosen initial visibility and any renewal cadence have measured headroom, renewal uncertainty has an explicit stopping boundary, and work that can exceed 12 hours has a chunking or engine-change disposition.
 
 ## Primary sources
