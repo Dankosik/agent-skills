@@ -28,6 +28,8 @@ Set measured budgets for serialized bytes, key overhead, value count, network tr
 
 ## Use leases only for duplicate suppression
 
+When a hot key duplicates work both inside each process and across the fleet, process-local single-flight and a cross-process lease remove different work and may be composed. A lease alone can leave same-process callers polling the remote cache; local single-flight alone still permits one fill per process. Keep both only when the measured duplication exists at both scopes.
+
 If a lease is justified, acquire it with a unique owner token and TTL, and release it only with atomic compare-and-delete. A plain delete can remove a successor's lease. The lease protects only its remaining validity window; pause, clock drift, partition, expiry, eviction, or failover can allow overlapping owners.
 
 Therefore a fill lease suppresses load but publication still checks authority generation. If a lock protects authoritative side effects, move that work to a system with the required coordination semantics or add downstream fencing that rejects stale owners. Asynchronous replication and `WAIT` do not make Redis strongly consistent under failover.

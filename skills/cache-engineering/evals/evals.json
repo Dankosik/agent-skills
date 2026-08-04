@@ -74,15 +74,58 @@
     {
       "id": 6,
       "prompt": "Checkout API имеет p99 900 мс при цели 500 мс. Репрезентативный trace показывает: чтение PostgreSQL занимает p99 6 мс, выполняется один раз на запрос и держит 40 QPS при загрузке database ниже 10%; 780 мс уходит на внешний payment provider. Команда всё равно предлагает Redis cache с TTL 5 минут для результата PostgreSQL и ожидает достичь цели. Проведи read-only design review и скажи, нужен ли cache. Production Redis, database, traffic и load tests не меняй.",
-      "expected_output": "A freshness-oriented no-cache verdict or bounded measurement plan that preserves the supplied target, quantifies the maximum removable origin cost, stops before speculative cache design, and makes no performance claim or unauthorized production change.",
+      "expected_output": "A statistically sound no-cache verdict or bounded paired-trace measurement plan that preserves the supplied target, does not treat independently reported percentiles as additive or as upper bounds, stops before speculative cache design, and makes no performance claim or unauthorized production change.",
       "files": [],
       "expectations": [
-        "Pins the user-visible p99 target, representative trace, PostgreSQL latency/QPS/load, and external-provider cost, and quantifies that the proposed cache cannot remove enough latency to meet the target.",
+        "Pins the user-visible p99 target, representative trace, PostgreSQL latency/QPS/load, and external-provider cost; concludes that the supplied evidence does not demonstrate enough removable PostgreSQL latency without treating independent percentiles as additive or as strict upper bounds; and requests paired trace evidence for exact quantification.",
         "Treats PostgreSQL as authority only for the measured lookup and finishes with a no-cache verdict or bounded measurement plan instead of inventing a cached value, key, TTL, or invalidation path.",
         "Stops before key, TTL/freshness, invalidation-race, and degraded-mode design because no cached value was selected, while noting that a remote cache would add correctness, isolation, and failure surface.",
         "Routes investigation toward the measured external-provider latency while retaining competing causes and does not mislabel hit ratio as evidence of user-visible value.",
         "Defines the comparable latency and origin-load evidence that would be required before reconsidering caching and makes no before/after performance claim without a candidate and representative benchmark.",
+        "Does not subtract independently reported percentile values as if they came from the same trace; uses paired trace-level or measured counterfactual evidence to quantify removable tail latency.",
         "Keeps production cache changes, database changes, traffic cutover, and load testing behind separate authorization and preserves the read-only review boundary."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "В Go-сервисе внутри одного HTTP request функция loadPolicy(userID, locale) вызывается трижды с одинаковыми аргументами. Результат неизменен в течение request, работа занимает около 250 мкс, reuse между request не нужен, а в request state уже есть обычная map. Реализуй самое маленькое безопасное устранение повторной работы и один тест. Не добавляй Redis, background workers или отдельную observability-систему.",
+      "expected_output": "A minimal request-scoped memoization change that reuses the existing request state, keys only on response-varying inputs, preserves error behavior, and proves repeated/equivalent and distinct calls with one focused test without unrelated cache infrastructure or production ceremony.",
+      "files": [],
+      "expectations": [
+        "Chooses request-scoped memoization and explicitly avoids cross-request, process-wide, or distributed caching because the prompt supplies no need for it.",
+        "Reuses the existing request map or surrounding ownership point rather than introducing a cache abstraction, service, dependency, or background lifecycle.",
+        "Keys on the evidenced response-varying inputs userID and locale, canonicalizing only when the surrounding contract requires it and not inventing tenant, authorization, serializer, or regional dimensions.",
+        "Uses request lifetime as the reuse boundary, so it does not add TTL, eviction, invalidation, distributed single-flight, rollout, or outage machinery.",
+        "Preserves the function's result and error semantics and proposes one focused runnable test proving one computation for repeated equal inputs and separate computation for a distinct key.",
+        "Centers the answer on the minimal implementation and test instead of emitting the full production cache report template."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Публичный GET /assets/product/{content_hash}.webp возвращает одни и те же байты всем пользователям; hash меняется при любом изменении файла, Authorization и cookies отсутствуют. Legacy middleware сейчас выставляет Cache-Control: no-store. Проведи read-only review и предложи минимальный HTTP/CDN cache contract и проверку. CDN configuration и production headers не меняй.",
+      "expected_output": "A minimal immutable-asset HTTP cache contract using the content-addressed URL as the version boundary, explicit public freshness headers and only evidenced key variants, with header/cache-status verification and no unnecessary Redis, purge, invalidation, or authorization design.",
+      "files": [],
+      "expectations": [
+        "Identifies the content-addressed asset bytes as the reusable value and the changing content hash as the version boundary, while treating the origin artifact as authoritative.",
+        "Recommends an explicit long-lived public freshness policy appropriate for immutable URLs, such as public max-age with immutable, and explains that no-store currently prevents reuse.",
+        "Uses the request URL plus only observed representation variants in the effective key and does not invent tenant, role, locale, authorization, or policy dimensions.",
+        "Uses a new content hash for changed bytes rather than requiring purge, outbox invalidation, authority-generation fencing, or Redis coordination for correctness.",
+        "Defines a focused check of response headers, repeated cache status/Age, byte identity, and origin-request reduction while leaving production CDN and header changes unauthorized.",
+        "Keeps the result proportional to the immutable HTTP asset case and avoids unrelated distributed-cache and database machinery."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "В Python-сервисе уже принятый in-process LRU кэширует exchange rate по ключу (base, quote) на 30 секунд, но результат также зависит от requested as_of date. Поэтому запрос USD/EUR за вчера иногда получает сегодняшний rate. Исправь root cause в общем key builder и добавь самый маленький runnable test. Не пересматривай доказанную необходимость кэша и production не меняй.",
+      "expected_output": "A root-cause key fix that adds canonical as_of to the shared key builder, preserves the existing LRU and cache contract, and leaves one focused collision test without reopening cache justification or adding unrelated infrastructure.",
+      "files": [],
+      "expectations": [
+        "Identifies the missing as_of dimension in the shared key as the direct cause of cross-date value reuse.",
+        "Changes the shared key builder rather than guarding one caller and includes base, quote, and a canonical as_of representation in the existing namespace.",
+        "Preserves the accepted in-process LRU, 30-second freshness policy, and surrounding behavior unless code evidence requires another change.",
+        "Adds one focused runnable test proving equal canonical dates share a key and distinct dates do not return one another's rate.",
+        "Does not restart the cache-justification benchmark or introduce Redis, distributed locks, durable invalidation, CDN, tenant, authorization, or rollout machinery without evidence.",
+        "Keeps production unchanged and reports the local implementation/test state without claiming deployment or live proof."
       ]
     }
   ]

@@ -11,7 +11,7 @@ Treat a cache as a bounded copy with an explicit **freshness** contract:
 
 A cache earns its complexity only when comparable evidence shows lower user-visible latency or origin load without breaking correctness, isolation, or failure behavior.
 
-**Global completion criterion:** for every cached value, authority, complete key scope, freshness contract, fill owner, invalidation/expiry path, concurrent-fill behavior, degraded-mode policy, observable outcome, and executable falsifier are defined in one canonical contract row.
+**Global completion criterion:** for every cached value being designed or materially changed, authority, complete key scope, freshness contract, fill owner, invalidation/expiry path, concurrent-fill behavior, degraded-mode policy, observable outcome, and executable falsifier are defined in one canonical contract row.
 
 Preserve supplied latency targets, freshness limits, isolation rules, and safety boundaries as fixed constraints. Missing evidence yields a gap or measurement plan while the target stays unchanged.
 
@@ -34,7 +34,7 @@ Start at the earliest unresolved link in the chain; visible later steps are not 
 - **Build/fix:** define or amend the canonical contract, change the earliest shared ownership point, and run safe local falsifiers.
 - **Prove:** pin the candidate and baseline, then run comparable correctness and measured-effect checks.
 
-Apply every completion criterion at the current work layer. Review or diagnosis reports observed evidence, the executable falsifier, and missing evidence; design specifies the falsifier and expected result; build or fix runs safe local checks. Production-only proof stays an explicit gap until separately authorized.
+Apply completion criteria at the current work layer only where they can change the selected branch's outcome. Review or diagnosis reports observed evidence, the executable falsifier, and missing evidence; design specifies the falsifier and expected result; build or fix runs safe local checks. A narrow fix amends the affected contract fields without reopening an accepted cache decision or inventing unrelated dimensions. Request-local work does not need distributed-cache ceremony. Production-only proof stays an explicit gap until separately authorized.
 
 ## 1. Prove the cache deserves to exist
 
@@ -47,11 +47,13 @@ Pin the environment, workload, time window, data shape, and user-visible operati
 
 Count repeated work that the proposed cache can actually remove. If PostgreSQL is suspected but the origin cost is unattributed, invoke `postgres-performance` first. If the measured avoidable work cannot pay for cache complexity, finish with a no-cache verdict.
 
+Do not subtract independently reported percentile values as if they came from the same trace, and do not call a percentile an upper bound or maximum. When only independent percentiles are available, conclude only what the evidence supports and require joint trace evidence or a measured counterfactual for removable tail latency.
+
 **Completion criterion:** one reproducible baseline names the user-visible target, quantified origin cost, representative workload, environment, and invariants, or the result is a bounded measurement plan with no performance claim.
 
 ## 2. Define authority and the cached-value contract
 
-For every cached value, write one canonical row. Later steps verify or amend this row instead of restating its decisions:
+For every cached value being designed or materially changed, write one canonical row. A narrow diagnosis or fix amends the affected fields and states correctness-relevant unknowns instead of manufacturing a full new contract. Later steps verify or amend the row instead of restating its decisions:
 
 | Field | Required decision |
 | --- | --- |
@@ -68,7 +70,7 @@ For every cached value, write one canonical row. Later steps verify or amend thi
 Common invariants live here:
 
 - **Authority:** use the authoritative revision as proof of truth; a cache hit supplies only a reusable copy. Compare or derive from that revision when ordering matters.
-- **Key:** equal keys must mean interchangeable values for the requesting principal. Canonicalize equivalent inputs before keying; use an explicit namespace/schema version. Keep raw tokens, credentials, and sensitive identifiers out of key material and logs.
+- **Key:** equal keys must mean interchangeable values for the requesting principal. Canonicalize equivalent inputs before keying; use an explicit namespace/schema version. Keep raw tokens, credentials, and sensitive identifiers out of key material and logs. When output depends on current authorization, field policy, or localization, prefer caching a tenant-scoped authority-independent value and reapply current policy after retrieval; cache final response variants only when their policy-version key and invalidation contract are reliable.
 - **Freshness:** classify every candidate or serve decision as `fresh`, `allowed-stale`, `forbidden-stale`, or `unknown-age`. TTL bounds reuse only when every serve path enforces it. Define age from origin generation or validation, not merely local insertion; route unknown age through the contract's explicit failure policy. Negative results are distinct from errors and need their own TTL and create-time invalidation.
 - **Failure:** a miss, timeout, eviction, corruption, and partition are different states. Each has a bounded serve/fallback decision, and fallback demand stays within origin capacity.
 
@@ -100,6 +102,8 @@ Use cache-aside when application-owned miss handling matches the proven need. Ch
 ## 4. Complete the key and representation
 
 Trace every producer, caller, and invalidator before editing a shared key builder. Compose keys from the contract, including tenant and authorization/policy scope before resource identity. Canonicalize order-insensitive sets, query defaults, casing, locale, currency, feature/policy versions, and representation format where they affect output. Bound high-cardinality dimensions.
+
+Test both directions of the key contract: equivalent inputs must share a key, while any evidenced response-varying input must produce a distinct key and value.
 
 Version the key namespace for incompatible meaning or serialization. Define value-size and decode limits. Compare compression only when measured network/memory savings exceed CPU and tail-latency cost. Reject oversized or corrupt values safely and count them.
 
@@ -139,6 +143,10 @@ Model hot-key and partition skew, mass expiry/eviction, and a cold fleet. Track 
 
 For a build/fix request, make the smallest change at the shared ownership point and add the smallest runnable test that breaks on the relevant race or isolation failure. Keep serializer/key versions compatible across rolling deploys, or introduce a new namespace and explicit read/write transition. Declare cold-fill demand, canary/ramp, rollback behavior, and cleanup timing before deploy.
 
+For a key fix, exercise the actual cache path: prove equivalent canonical inputs reuse one entry and prove a response-varying input cannot retrieve another input's value. Key-string inequality alone is not enough.
+
+For a cache isolation incident, migration proof covers same-ID tenants, distinct roles/policies/locales, policy revocation, create/update/delete, mixed and cold fleets, canary isolation signals, cache outage, and rollback to bypass/no-cache. If final-response caching remains as a fallback design, enumerate its tenant, authorization/policy-version, locale, representation, and serializer key dimensions even when the preferred design caches authority-independent data.
+
 **Completion criterion:** local code and tests implement the contract; rollout, cold start, migration, rollback, and later cleanup preserve mixed-version correctness without requiring an unauthorized production action.
 
 ## 9. Prove the outcome
@@ -158,27 +166,25 @@ Call a performance improvement only when fresh comparable measurements meet the 
 
 ## Report
 
-Lead with the verdict and artifact state: proposed, implemented locally, tested, deployed, or verified live. Include only sections that carry information for the selected branch; always include `Verdict` and `Authority and gaps`. For a no-cache result, retain the baseline, measured reason or measurement plan, and authority boundary, and omit empty cache sections.
+Lead with the verdict and artifact state: proposed, implemented locally, tested, deployed, or verified live.
 
-```markdown
-## Verdict
-[Need/no-need decision, layer/strategy, readiness, and measured outcome]
+For a mutable shared cache, multi-tenant/auth boundary, outage, migration, or production-readiness decision, use the full decision interface:
 
-## Baseline and target
-[Comparable workload, latency/load baseline, target, invariants]
+- baseline/target or observed symptom;
+- canonical contract and first violated link;
+- design or fix, including degraded mode and rollout/rollback;
+- executable correctness, freshness, isolation, failure, and recovery falsifiers;
+- comparable measured effects when actually proven;
+- actions performed, authority boundaries, and remaining gaps.
 
-## Cache contracts
-[Canonical Step 2 row for each cached value; later sections cite row names]
+For request-local memoization, immutable content-addressed assets, a no-cache verdict, or a narrow fix, include only what carries information for that branch:
 
-## Design or diagnosis
-[Cause or first violated chain link, contract changes, rollout/rollback]
+- the relevant baseline/target or observed symptom;
+- affected contract decisions and cause or design;
+- executable falsifiers and observed results;
+- measured effects when actually proven;
+- actions performed, authority boundaries, and remaining gaps.
 
-## Correctness, freshness, and isolation
-[Executable concurrency/failure/isolation falsifiers and observed results]
+For a no-cache result, name the authority only for the measured lookup, retain the measured reason or bounded measurement plan, note the added correctness/isolation/failure surfaces without designing them, include the comparable end-to-end and origin evidence required to reconsider the decision, preserve production-action boundaries, and omit speculative cache design. For a narrow fix, center the patch and test rather than reproducing the full lifecycle. Missing production evidence remains an explicit gap, not an inferred win.
 
-## Measured effect
-[Comparable latency, throughput, origin-load, age, error, and recovery deltas]
-
-## Authority and gaps
-[Actions performed, production actions still requiring approval, unverified claims]
-```
+Before finishing, check the affected contract rather than the prose: every relevant field has a decision, evidence-backed unknown, or falsifier; rollout claims include rollback proof; performance claims use comparable baseline/candidate evidence; key tests prove both equivalence and separation. Do not narrate irrelevant checks.

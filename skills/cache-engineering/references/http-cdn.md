@@ -31,6 +31,8 @@ A request `Authorization` header does not become a per-principal cache key autom
 
 Define which statuses are cacheable. Negative responses such as 404 can be cached, so give them explicit freshness and create-time supersession rather than relying on heuristic defaults. Keep an authoritative not-found distinct from an origin error.
 
+For an immutable content-addressed URL, verify that the served bytes match the digest/version encoded by the URL, that no conflicting headers defeat the intended policy, and that repeated CDN requests show cache status/Age plus the expected bounded origin fills. If negotiation or transformation changes bytes, include that representation in the version/key contract.
+
 ## Revalidation, collapse, and invalidation
 
 An intermediary may collapse equivalent misses into one origin request. Treat that as scoped single-flight: one slow or failed fill can delay many callers, and behavior can be per location rather than global.

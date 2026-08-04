@@ -12,6 +12,10 @@ This file owns request- and process-local mechanics. The common authority, key, 
 
 Request memoization inherits the request's lifetime and isolation, so it usually needs no TTL or eviction. It still needs the complete semantic key if one request can carry multiple tenants, principals, locales, or versions.
 
+Preserve the memoized function's exact result semantics. If a stable error or partial result is part of that request-scoped result, retain the same result/error pair rather than silently changing repeated-call behavior.
+
+Use one focused test to prove both behaviors: repeated equal inputs compute once, and one response-varying input computes separately. Exercise the memoized lookup rather than only comparing key strings.
+
 An in-process cache multiplies entries, fills, and invalidation consumers by process count. Include rolling deploys, autoscaling, forked workers, and process restarts in cold-start and origin-capacity calculations.
 
 ## Pick concurrency primitives
