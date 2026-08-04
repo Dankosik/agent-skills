@@ -70,6 +70,32 @@
         "Provides a failure/overload matrix and bounded load, duplicate, replay, provider-timeout, backlog, isolation, deployment, and recovery proof plan.",
         "Uses dedicated capability skills as handoffs while preserving one end-to-end notification contract."
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Сделай узкий read-only diagnosis одного контракта. API Service вызывает Pricing Service с deadline 800 ms. Оба слоя независимо делают до 3 попыток по 500 ms, поэтому при деградации возникает до 9 downstream calls и запрос выходит за общий deadline. Остальная архитектура и capacity сейчас не обсуждаются. Укажи точную причину, минимальный target contract и проверку; ничего не меняй.",
+      "expected_output": "A compact causal diagnosis of multiplicative nested retries that assigns one retry owner, propagates the remaining deadline, bounds attempts and backoff, and gives a focused falsifier without reopening unrelated topology or capacity design.",
+      "files": [],
+      "expectations": [
+        "Identifies independent nested retry loops as the direct amplification cause and explains why their per-attempt timeouts cannot fit the 800 ms end-to-end budget.",
+        "Assigns one deliberate retry owner, propagates remaining deadline and cancellation, and bounds per-attempt timeout, attempts, backoff, and concurrency.",
+        "Conditions retries on safe operation identity or idempotency and transient failure classification rather than retrying every failure.",
+        "Provides a runnable degraded-dependency test that bounds total downstream calls and wall-clock completion within the declared contract.",
+        "Keeps the answer read-only and scoped to the affected edge without inventing unrelated services, stores, capacity math, migrations, or a full architecture report."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Внутренний сервис раз в день импортирует CSV до 20 тысяч строк. Один процесс и один PostgreSQL укладываются в 40 секунд при допустимом окне 10 минут; повторный запуск можно сделать идемпотентным по file_hash. Команда предлагает Kafka, отдельный coordinator и четыре workers 'для масштабируемости'. Выбери архитектуру на текущие требования, зафиксируй гарантию и критерии, когда усложнение станет оправданным. Production не меняй.",
+      "expected_output": "A simple single-deployable, single-database import design with stable file identity and transactional or checkpointed application, plus measurable triggers for later parallelism, without speculative Kafka or coordinator infrastructure.",
+      "files": [],
+      "expectations": [
+        "Keeps one deployable and PostgreSQL because the supplied 40-second runtime already fits the 10-minute window and no independent scaling or failure boundary is established.",
+        "Uses file_hash as a stable import identity with a durable status/result and defines whether row application is transactional or safely checkpointed and replayable.",
+        "Defines the caller/operator-visible accepted, running, succeeded, and failed behavior without claiming exactly-once execution.",
+        "Names measurable upgrade triggers such as sustained window breach, resource saturation, required parallel tenant isolation, or independent fan-out rather than future-proofing by assertion.",
+        "Provides a compact rollback/crash/duplicate-file proof and does not add Kafka, coordinator, or worker topology without a named force."
+      ]
     }
   ]
 }

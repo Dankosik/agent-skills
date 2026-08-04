@@ -15,6 +15,14 @@ Every component and edge must pay for its complexity by satisfying a named requi
 
 Reuse supplied evidence and settled decisions; inspect only what can change the design. Read only reference branches whose stated conditions match the current forces.
 
+Choose depth from the requested decision:
+
+- For a new end-to-end design, production-readiness claim, cross-component migration, or material availability/consistency change, trace the full in-scope chain from forces through proof.
+- For a narrow review, diagnosis, or correction, start at the affected journey and load only the steps and references that can change its verdict or make the correction unsafe. Do not manufacture capacity, topology, migration, or failure work unrelated to that boundary.
+- When the simplest answer is to keep the current deployable, store, or synchronous path, say so and name the evidence that would justify distributing it later.
+
+The completion criteria below are checks for sections actually used, not mandatory report headings. Preserve unresolved fields as explicit gaps; do not fill them with ceremonial architecture.
+
 - For design, review, diagnosis, or planning, inspect available requirements, code, schemas, diagrams, telemetry, incidents, and deployment artifacts; preserve repository, infrastructure, and production state.
 - For build or change requests, make in-scope local changes and run safe, non-destructive validation.
 - Treat provisioning, deployment, traffic changes, failover, data movement, production load or fault tests, credential changes, and destructive actions as separate production actions requiring explicit authorization. Keep an authorized target and its limits exact, then verify it with fresh readback.
@@ -47,7 +55,7 @@ Turn the request, supplied evidence, and settled decisions into:
 
 Use precise targets where the user supplied them. When a target is missing, preserve it as a variable or bounded assumption rather than inventing precision.
 
-**Completion criterion:** every supplied requirement is classified as a functional invariant, measurable quality target, hard constraint, explicit assumption, or open decision; conflicts are visible; the design question, protected invariants, requested artifact, and readiness bar are stated.
+When two supplied requirements conflict, do not silently weaken one with the other. State the conflict and either keep the stricter safety contract as the conservative assumption or present explicit alternatives with the decision needed to choose between them.
 
 ## 2. Quantify the load envelope
 
@@ -62,8 +70,6 @@ For every design-driving path, estimate the dimensions that can change the topol
 
 Show formulas, units, ranges, and sensitivity to the largest assumptions. Read [references/capacity-and-topology.md](references/capacity-and-topology.md) when capacity, decomposition, sharding, cells, or independent scaling may affect the design.
 
-**Completion criterion:** each critical path has a numeric envelope or an explicit formula awaiting named inputs; dominant scale axes, skew, expected headroom, and the first plausible resource ceiling are identified.
-
 ## 3. Draw the simplest viable topology
 
 Start from the current system, or from one deployable and one authoritative store for a greenfield design. Add a network boundary, copy, queue, cache, partition, service, region, or control plane only when a force requires independent scaling, failure containment, data or trust ownership, deployment lifecycle, geographic locality, or a different consistency or latency contract.
@@ -75,8 +81,6 @@ For every component, record:
 - synchronous and asynchronous interfaces;
 - scaling unit, failure domain, trust boundary, and operator;
 - dependencies needed to serve or recover.
-
-**Completion criterion:** every component has one named responsibility, state owner, scaling and failure boundary, and requirement that justifies it; every critical operation is traceable through the topology and named handoff owners.
 
 ## 4. Define state and interaction contracts
 
@@ -92,8 +96,6 @@ For each critical operation, trace the read and write path and name:
 
 Read [references/data-and-coordination.md](references/data-and-coordination.md) when state crosses a process, partition, replica, datastore, or region, or when ordering, consensus, distributed transactions, sagas, CQRS, or materialized views are considered.
 
-**Completion criterion:** every stateful flow has one authority, explicit commit points, bounded guarantees on every edge, and a named divergence and reconciliation model; every correctness claim names the mechanism and guarantee that establish it.
-
 ## 5. Break the design
 
 Read [references/resilience-and-load.md](references/resilience-and-load.md) whenever the design has a remote dependency, retry, queue, failover, autoscaling, or availability target.
@@ -105,8 +107,6 @@ Build a failure matrix for critical components and edges:
 
 Include slow and partial failures, exhausted resources, retry amplification, backlog growth, stale or duplicate data, process and host loss, dependency and control-plane loss, zone or region loss where applicable, and security or tenant-isolation failures. Recalculate remaining capacity under the failure scenario; redundancy that cannot carry failover load does not meet an availability target.
 
-**Completion criterion:** every critical journey has a bounded failure and overload response, remaining-capacity assumption, recovery owner, observable signal, and executable test; required outcomes remain bounded under unreliable networks, delayed failover, and finite queues.
-
 ## 6. Compare alternatives and earn patterns
 
 When the choice is material, compare the simplest viable design with its strongest practical alternative; for a review, compare the current design with the smallest viable correction. Evaluate both against requirements, capacity, consistency, failure containment, operational burden, security, cost, delivery time, and future change. If no alternative could change the decision, record that and end the comparison.
@@ -116,8 +116,6 @@ Record each material pattern decision as:
 `forces -> chosen pattern -> guarantee -> cost/new failure mode -> rejected alternative -> falsifier`
 
 Prefer a managed or already-operated primitive when it provides the required contract. A familiar pattern that changes no decision is reference, not architecture.
-
-**Completion criterion:** the selected design wins on stated priorities or exposes an explicit unresolved tradeoff; every material pattern resolves named forces and its added failure modes and falsifier are recorded; the comparison contains only alternatives that could change the decision.
 
 ## 7. Design evolution and proof
 
@@ -133,11 +131,11 @@ Define:
 
 Map each high-risk assumption to current evidence or to a named validation with environment, workload, expected observation, stopping rule, and owner.
 
-**Completion criterion:** every high-risk assumption and quality target has evidence or an executable validation plan; rollout, mixed-version behavior, recovery, and rollback or roll-forward are defined before the design is called ready.
-
 ## 8. Report the design
 
 Lead with the verdict. Preserve the requirements, decisions, evidence, material caveats, and next action; trim introductions, repetition, generic pattern explanations, and optional background first. Keep facts separate from inference. Include a Mermaid diagram when three or more components or failure domains interact. Use this template as a menu and omit empty sections:
+
+For a narrow task, prefer the compact interface: `verdict -> affected contract -> cause or decision -> smallest correction -> proof/gap`. Use the fuller template only when several components, guarantees, or rollout states interact.
 
 ```markdown
 ## Verdict
@@ -171,4 +169,4 @@ Lead with the verdict. Preserve the requirements, decisions, evidence, material 
 [Dedicated skills, missing evidence, open decisions, and next action]
 ```
 
-**Completion criterion:** every material requirement, component, state owner, interaction guarantee, capacity assumption, failure response, decision, validation, and gap is traceable in the report, and the verdict makes readiness unambiguous.
+For a full design or readiness claim, check once at the end that: requirements and conflicts are classified; design-driving paths have numeric envelopes or named missing inputs; every component is justified by a force; stateful flows name authority, commit, guarantees, divergence, and recovery; critical journeys have bounded failure behavior, remaining capacity, signals, and tests; material choices include a practical alternative and falsifier; and high-risk assumptions, mixed-version rollout, rollback or roll-forward, and gaps have evidence or an executable validation plan.
