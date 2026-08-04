@@ -53,6 +53,20 @@
         "States functional dependencies, lossless decompositions, source-of-truth decisions, and any intentional snapshots.",
         "Provides an expand/backfill/verify/switch/contract migration sequence while preserving the read-only authority boundary."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "Нужен узкий read-only design для PostgreSQL 15, без редизайна остальных таблиц. Есть memberships(tenant_id, user_id, email, revoked_at). Правило: внутри tenant может быть не больше одного active membership с данным email без учёта регистра; revoked memberships сохраняются в истории, пустой email запрещён. Дай минимальный proposed DDL и ровно четыре проверки, включая конкурентную вставку. Ничего не применяй.",
+      "expected_output": "A compact invariant-scoped PostgreSQL 15 design using a nonblank-email check and active-row case-insensitive tenant-scoped uniqueness, with explicit normalization semantics and exactly four validation scenarios, without redesigning the domain.",
+      "files": [],
+      "expectations": [
+        "States the affected row grain and the tenant-scoped active-email invariant, while preserving revoked rows as history.",
+        "Makes the case-insensitive email comparison semantics explicit rather than assuming that lower is a complete international email canonicalization rule.",
+        "Proposes PostgreSQL 15-compatible DDL that rejects blank email and enforces active uniqueness per tenant with a partial unique expression index or an equivalently race-safe constraint path.",
+        "Explains that database uniqueness arbitrates concurrent inserts and that revoked history does not block one new active membership.",
+        "Provides exactly four executable checks covering concurrent same-tenant active duplicates, another tenant, revoked-then-active history, and blank email.",
+        "Keeps the DDL proposed/read-only and does not redesign users, organizations, authorization, migrations, or unrelated schema."
+      ]
     }
   ]
 }
