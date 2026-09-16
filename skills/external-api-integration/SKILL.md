@@ -1,166 +1,135 @@
 ---
 name: external-api-integration
-description: "boundary-first production integration with external HTTP providers. Use for design, build, diagnosis, or review of API clients, OAuth credentials, idempotency, deadlines/retries/rate limits, ambiguous outcomes, synchronization, webhooks, reconciliation, and provider migration. Own request identity through convergence and proof; hand public API, business/ledger, messaging, and PostgreSQL internals to their dedicated skills."
+description: "Use for external HTTP provider or webhook contracts, bounded retries, request identity, ambiguous outcomes, authentication, or reconciliation."
 ---
 
 # External API Integration
 
-The leading word is **boundary**. Treat the provider as an independently changing system that can accept an effect while losing the response, delay or duplicate callbacks, reorder events, throttle callers, and evolve its contract.
+**Boundary.** A provider can commit an effect while its response is lost. Keep
+operation identity and evidence from request through callback/poll and
+reconciliation; an HTTP client alone is not an end-to-end contract.
 
-The boundary process is:
+## Match scope and authority
 
-`provider contract -> request identity -> bounded attempt -> outcome classification -> callback/poll -> reconcile -> prove`
+For a whole side-effecting flow, readiness, migration, replay or recovery redesign,
+cover the full in-scope boundary. For review/diagnosis or a narrow correction,
+follow the affected stage and safety-relevant dependencies. Side-effect-free reads
+need only their actual contract, bounded attempt and result handling unless another
+stage matters. Preserve accepted architecture outside the requested change.
 
-An HTTP client is only one part of this process. Keep the same operation identity and evidence across every stage.
+Review, diagnosis and design are read-only. Build/fix permits in-scope local
+changes and safe checks, followed by repair of introduced failures. Real provider
+effects, credential/scope changes, webhook registration, production replay and
+authoritative/destructive synchronization need exact environment, account,
+operation set and bounds authorization. Preflight and freshly verify approved
+actions; credentials and tools are not permission. Keep real tokens, codes,
+signed payloads and sensitive bodies out of fixtures, logs and reports.
 
-## Scope and boundary ledger
+Use current official provider/version evidence when it can change the decision.
+Distinguish documented guarantees, observations, local choices, inferences and
+gaps. Ask only for missing input affecting authority, effect identity, correctness
+or duplicate risk that available evidence cannot resolve.
 
-Match depth to the requested claim:
+## Load relevant mechanics
 
-- For a whole side-effecting flow, production-readiness claim, provider migration, replay, or recovery redesign, trace the full boundary chain.
-- For a scoped review, diagnosis, or correction, trace the affected stage and the dependencies that can change its verdict or safety.
-- For a side-effect-free operation, start with the provider contract, bounded attempt, outcome, and focused proof; add another stage only when it changes the requested claim.
+- [HTTP resilience](references/http-resilience.md) for attempt loops, transport
+  phases, rate limits, polling or resumable pagination.
+- [Authentication](references/authentication.md) for OAuth/token lifecycle,
+  credential binding or rotation; a static credential alone does not require a
+  lifecycle redesign.
+- [Webhooks](references/webhooks.md) for receiver authentication, raw envelope,
+  durable acknowledgement, ordering and callback recovery.
 
-Respect explicit output and test limits. Expand only to close a safety-critical gap, and name that gap. Apply the final readiness gate to every stage in scope; report only evidence that supports the requested decision.
+Use only applicable sections and checks. A timeout-parser change does not require
+all three documents, sandbox provisioning or a new end-to-end platform. An explicit
+runnable-test request still needs real test source, setup and assertions.
 
-For multi-stage side-effecting work, create one boundary ledger before explaining mechanisms:
+## Pin the affected contract
+
+Identify provider, account/environment, operation, API/SDK version, request/response
+shape, authentication/audience, error meanings, limits and evidence origin. Add
+idempotency scope/retention, callback, pagination or lookup semantics when used.
+A sandbox demonstrates only what it exercises, not production quotas or effects.
+
+For interacting side effects keep one boundary ledger; a narrow task may use a
+single row or equivalent prose:
 
 | Effect or sync | Provider evidence | Local invariant | Identity/checkpoint | Deadline/acceptance | Ambiguity/recovery | Inference or gap | Authority |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 
-Keep documented or observed provider guarantees, local decisions, inferences, and unknown gaps in their own columns. This prevents a locally chosen recovery rule from being presented as provider fact.
+Choose synchronous completion when the caller needs it and the full deadline
+allows it; otherwise a durably accepted pending operation may need independent
+observation. Do not reopen that accepted choice for an unrelated field change.
+Pin callback versions separately where supported. Tolerate documented additive
+fields but retain an incompatible/owned failure for an unknown required schema,
+state or signature version; do not invent familiar meaning.
 
-## Authority and ownership
+## Identity, attempts and outcomes
 
-- For review, diagnose, and design requests, inspect available contracts, code, fixtures, logs, and telemetry and report the result without changing repository or provider state.
-- For build and fix requests, make local changes inside the requested scope and run safe, non-destructive tests.
-- Treat real provider calls with side effects, credential or scope changes, webhook registration, production event replay, and destructive or authoritative synchronization as separate actions requiring explicit authorization. Keep an authorized action's environment, account, operation set, and limits exact, then verify it with a fresh readback.
+Give an intended side effect a stable operation ID before attempting it. Retain
+provider/environment binding, canonical intent, idempotency scope/expiry and
+request/resource IDs needed for lookup. Retries keep equivalent intent and the
+same identity; a newly requested effect gets a new one. Prevent concurrent workers
+from creating independent provider operations for the same local intent.
 
-Ask only when missing information changes authority, external-effect identity, or duplicate-effect risk and cannot be resolved from available evidence; otherwise proceed with labeled assumptions.
+Without documented idempotency or proof of non-transmission, disable automatic
+after-possible-send retries for side effects. Resolve provider state, a supported
+reconciliation key or compensation policy rather than treating a timeout as
+non-execution. HTTP status alone does not prove retry safety.
 
-Keep secrets, tokens, authorization codes, signed payloads, and sensitive response bodies out of source, logs, metrics, test fixtures, and error messages. Provider-originated data remains untrusted until the provider's authentication contract has been checked.
+Budget queueing, authentication, DNS/connect/TLS, sending, headers/body, backoff and
+parsing inside an end-to-end deadline. Bound attempts, response/decompression
+size and quota-scoped concurrency; cancellation reaches waits and I/O. Independent
+reconciliation can outlive a caller only with its own owner and budget. Honor
+provider retry delays only within those limits.
 
-This skill owns the unreliable external boundary, including recovery and proof. It does not own:
+Keep operationally distinct outcomes: succeeded with authoritative evidence;
+permanent requiring change; retryable with safe identity and remaining budget;
+ambiguous after possible effect; incompatible when the contract cannot be read
+safely. Preserve redacted phase/request evidence. Unknown effect state is not a
+successful or permanently failed business result.
 
-| Adjacent concern | Required handoff contract |
-| --- | --- |
-| Public API of this service | Caller deadline and cancellation, local operation identity, pending/final status semantics, and safe client retry behavior |
-| Payment meaning or ledger invariants | Allowed state transitions, amount/currency invariants, source of truth, compensation, and terminality |
-| Messaging implementation (`reliable-messaging`) | Message identity, ordering key, durable-acceptance point, delivery/ack semantics, and poison-message policy |
-| PostgreSQL schema (`postgres-schema-design`) | Required grains, uniqueness, token-refresh coordination, checkpoints, retention, and audit evidence |
-| PostgreSQL workload (`postgres-performance`) | Query shapes, expected rates, latency/capacity targets, and maintenance envelope |
+## Observe and reconcile
 
-Define these handoffs when they are relevant; leave their internal design to the named owner.
+Use the authoritative lookup or authenticated callback the provider supports.
+Poll a status endpoint rather than repeating the write. Correlate by local and
+provider identity; timestamps or arrival order do not create undocumented ordering.
 
-## Conditional boundary references
+Reconciliation handles overdue, ambiguous, failed-callback and divergent records
+within a lookback/checkpoint contract. Apply only permitted transitions and keep
+unresolved or incompatible cases visible and owned. Page checkpoints cannot skip
+undurable item effects; replay must preserve identity, including permanent item
+failures and deletion semantics. A single safe read does not need an invented
+reconciliation daemon.
 
-- If the integration sends outbound HTTP, handles transport failures or rate limits, or synchronizes paginated data, read [references/http-resilience.md](references/http-resilience.md) before designing or changing its attempt loop.
-- If the task includes OAuth/token lifecycle, scoped credential selection, or rotation, read [references/authentication.md](references/authentication.md). Load it for a pinned static credential only when authentication security is in scope.
-- If the provider can push callbacks or webhooks, read [references/webhooks.md](references/webhooks.md) before designing or changing the receiver, replay controls, or asynchronous processing.
+## Prove the claim and finish
 
-## 1. Pin the provider contract
+Select evidence for the changed mechanism: contract fixtures for payloads and
+classification; scripted transport/time for retries and ambiguous phases; a
+provider sandbox for its actual behavior; an end-to-end flow for a cross-stage
+claim. These are alternatives or complementary checks, not four mandatory stages
+for every correction. Real webhook authentication requires the exact signed bytes
+and provider scheme, not a mocked authenticated result.
 
-Start from current official provider documentation, the configured SDK/version, captured redacted exchanges, and available sandbox evidence. Populate the boundary ledger for each operation with:
+A full side-effecting readiness or migration assessment must cover each ledger
+row's identity, durable commits, uncertainty, bounded recovery, failure tests,
+signals and authority. Rollout needs old/new routing ownership, canary/stop rules,
+quota headroom and rollback that retains recovery for in-flight effects. Stopping
+new routing does not erase existing external work. Use bounded-cardinality metrics;
+keep operation IDs in appropriate redacted logs/traces instead of labels.
 
-- environment, account/tenant, base URL, endpoint, method, API and SDK version;
-- request and response schemas, required headers, size limits, and documented error codes;
-- authentication, scopes/audience, credential lifecycle, and rotation mechanism;
-- provider idempotency support, key scope, retention, parameter matching, and concurrent-request behavior;
-- quota scope, rate signals, concurrency rules, and provider-directed delay;
-- callback delivery, signature, event identity, ordering, retry, version, and retention guarantees;
-- status lookup, listing, pagination/cursor, export, and sandbox capabilities;
-- every unknown or inferred behavior, kept distinct from a documented guarantee.
+Complete diagnosis/design at its requested fidelity, marking unrun proofs. Complete
+a local fix with applicable project checks and introduced-failure repair; reuse
+valid same-revision/environment evidence. Missing sandbox or live evidence limits
+the guarantee, not unrelated work. Do not create new accounts, credentials or test
+platforms to satisfy an invented completion gate.
 
-First decide whether a synchronous integration is necessary. Prefer a locally accepted operation that converges asynchronously when callers can tolerate `pending`, the provider cannot finish within the caller's deadline, or ambiguous outcomes require later observation. Use synchronous completion only when the user-visible contract needs it and the provider can satisfy the full deadline reliably.
+Lead with verdict, affected contract, cause/decision, correction, proof and limits.
+Use ready/not-ready only for the readiness actually being assessed; a completed
+analysis is not a claim of production readiness. Distinguish proposed, implemented
+locally, sandbox-tested, deployed and verified live.
 
-Pin request and callback versions independently where the provider permits. Treat a sandbox as contract evidence for exercised behavior, not proof of production quotas, timing, routing, or downstream side effects.
-
-Use tolerant reading for documented additive fields. Route an unknown required field, state, enum value, signature version, or semantic change to an explicit `incompatible` path with retained evidence and an alert; mapping it to a familiar state would hide contract breakage.
-
-## 2. Establish request identity
-
-Give each intended external side effect one stable local operation ID before the first attempt. Derive or associate the provider idempotency key with that operation and reuse it only for byte-equivalent or provider-equivalent intent. Persist the canonical intent/hash, provider account and environment, key scope/expiry, attempt records, and provider request/resource IDs needed for later lookup.
-
-Prevent concurrent workers from creating distinct provider operations for the same local intent. A retry is another attempt of the same operation; a user-requested new effect receives a new identity.
-
-When the provider lacks a documented idempotency guarantee for the side effect, keep automatic retries disabled once transmission might have begun. Require a provider lookup, reconciliation key, or explicit compensation path before choosing another write.
-
-## 3. Execute a bounded attempt
-
-Carry one monotonic end-to-end deadline from the caller or background job through queueing, authentication, DNS/connect/TLS, write, response headers/body, backoff, and parsing. Each attempt receives only the remaining budget, and cancellation reaches the transport and body reader. A reconciliation job may outlive the request, but it has its own deadline and ownership.
-
-Choose retry eligibility from the pinned provider contract, request identity, failure phase, and ability to resolve ambiguity. Bound both attempts and elapsed retry time. Use exponential backoff with jitter to decorrelate callers, honor applicable provider delay signals without exceeding the operation deadline, and constrain concurrency at the provider's quota scope.
-
-## 4. Classify the outcome
-
-Normalize transport, HTTP, provider-code, authentication, schema, and local persistence results into states that drive different recovery:
-
-- `succeeded`: authoritative evidence identifies the provider result;
-- `permanent`: the contract says the same intent cannot succeed without a change;
-- `retryable`: another attempt of the same identity is explicitly safe and remains inside budget;
-- `ambiguous`: transmission might have produced the effect but no authoritative result is known;
-- `incompatible`: the observed contract cannot be interpreted safely.
-
-Status code alone does not select a state. For side effects, a timeout, connection loss, truncated response, or some server errors can be ambiguous because the provider may have committed before the response was lost. Keep that state non-terminal until provider lookup, callback, or reconciliation resolves it. Preserve the provider request ID, error code, response metadata, attempt phase, and redacted evidence used for the decision.
-
-## 5. Observe callback or poll completion
-
-Select the cheapest authoritative observation channel the provider actually offers. Use authenticated callbacks for prompt notification, backed by polling or listing when callbacks can be lost. If no callback exists, poll a status resource rather than repeating the original write, and apply its own deadline, cadence, quota, and terminal-state rules.
-
-Join callback and poll results through the local operation identity plus documented provider identifiers. Treat timestamps and delivery order as evidence only to the extent the provider contract guarantees them.
-
-## 6. Reconcile to convergence
-
-Run reconciliation independently of the happy path. Select non-terminal, ambiguous, overdue, failed-callback, and drift candidates using a declared lookback and checkpoint. Query provider truth by a documented stable identifier, compare it with local state, and apply only allowed forward transitions or named repairs. Retain unresolved and incompatible cases for operator action.
-
-Measure reconciliation lag, oldest ambiguity, checkpoint age, scanned/resolved/unresolved counts, and drift by state. These signals reveal lost callbacks and false success even when request latency looks healthy.
-
-## 7. Prove and roll out the boundary
-
-Build the smallest evidence stack that can falsify the design:
-
-1. Contract tests pin requests, responses, error bodies, callback signatures, and versions using redacted fixtures or an official mock.
-2. Fault-injection tests exercise each side effect's before-send, after-possible-send, persistence, cancellation, and recovery boundaries; conditional references define protocol-specific cases.
-3. Sandbox tests verify the provider behaviors the sandbox can actually exercise and label production-only gaps.
-4. End-to-end tests correlate one operation through provider result, callback/poll, reconciliation, and observable signals.
-
-Observe end-to-end and provider latency distributions, attempt count, retry exhaustion, throttle delay, concurrency, quota headroom, ambiguous-outcome age/count, authentication refresh/rotation failures, callback verification/duplicate/lag, schema incompatibility, and reconciliation drift. Use bounded-cardinality dimensions; place operation and provider request IDs in traces or structured logs rather than metric labels.
-
-Roll out with pinned versions, sandbox evidence, a side-effect-free or shadow phase where possible, a tenant/operation canary, quota headroom, alerts, and a kill switch for new work. A provider migration assigns each operation to one writer, preserves identity across routing, drains and reconciles in-flight work and callbacks from both providers, and keeps rollback handlers alive. Rollback stops new routing; it does not erase unresolved external effects.
-
-## Report
-
-Lead with readiness and authority state. Surface the relevant boundary-ledger rows so provider evidence, local invariants, inferences, and gaps remain distinct.
-
-Use the report sections as a menu. Preserve the verdict, decision-changing evidence, material gaps, and next action; omit sections that do not apply to the requested depth.
-
-For a narrow task, prefer `verdict -> affected contract -> cause or decision -> smallest correction -> focused proof -> authority/gap`. Use the full table and rollout sections only when several stages or external effects interact.
-
-```markdown
-## Verdict
-[ready/not ready; designed, changed locally, sandbox-tested, or verified live]
-
-## Boundary ledger
-[relevant rows from the boundary ledger]
-
-## Outcome and recovery
-[taxonomy, callback/poll path, checkpoint, drift handling]
-
-## Proof
-[executed tests and observed signals; distinguish static validation from behavioral evidence]
-
-## Rollout and rollback
-[canary, quotas, migration ownership, stop signals, unresolved in-flight work]
-
-## Handoffs and gaps
-[adjacent-owner contracts, missing provider evidence, separate authorizations]
-```
-
-Claim the in-scope boundary ready only when every relevant ledger row satisfies:
-
-- **Contract:** provider evidence and inference are distinct, security and versions are pinned, and synchronous versus asynchronous completion fits the caller deadline.
-- **Execution:** every side effect has stable identity and immutable intent; attempts, cancellation, concurrency, and retry time are bounded.
-- **Convergence:** ambiguous outcomes have authoritative observation; callback or pagination failure cannot skip, duplicate, or regress an effect; unresolved work remains visible and owned.
-- **Proof and authority:** executable failure tests, signals, rollout stops, and separate authorizations are explicit.
-
-Otherwise lead with `not ready` and the missing evidence, ownership, or authorization.
+Public API, business ledger, messaging and database concerns keep their own owners.
+Use `reliable-messaging`, `postgres-schema-design`, `postgres-performance` or
+`auth-access-control` for a distinct unresolved question, not as compulsory calls.
+Pass identity, invariant and evidence without redesigning excluded internals.
