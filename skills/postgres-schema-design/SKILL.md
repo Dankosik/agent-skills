@@ -1,138 +1,95 @@
 ---
 name: postgres-schema-design
-description: "Invariant-first PostgreSQL schema design. Use when translating business entities and rules into normalized tables, keys, relationships, constraints, ERDs, or safe migrations; or reviewing a schema for integrity gaps, update anomalies, temporal or tenant rules, polymorphic/EAV/JSON misuse, and intentional denormalization. Use postgres-performance instead when the primary outcome is query, load, or index tuning."
+description: "Use to design or review PostgreSQL relations, identities, constraints, or migrations from business invariants, rather than tune query performance."
 ---
 
 # Invariant-First PostgreSQL Schema Design
 
-A schema is an executable model of business invariants:
+**Invariant.** A schema models business facts and their enforcement. Follow
+language, dependencies, relations, constraints and scenarios only as far as the
+requested decision needs. Start normalized; deliberate duplicated facts require
+an authority, synchronization, repair and justified benefit, not a blanket ban.
 
-`language -> invariants -> dependencies -> relations -> constraints -> scenarios`
+## Request and authority
 
-Model correctness before physical optimization. Start normalized; make every denormalization name its source of truth, synchronization mechanism, repair path, and measured reason.
+Establish the requested schema boundary, artifact, work mode and relevant target
+version from the request and existing evidence. Design/review/planning preserves
+repository and database state. Build/change permits canonical migration/model/test
+edits and appropriate non-destructive local validation, with repair of introduced
+failures. Production DDL, backfill, data repair, constraint validation and migration
+execution require separate exact action/target/bounds authorization and fresh
+readback. Credentials, an available database or a generated migration grant none.
 
-## Request and authority contract
+Ask when unresolved business meanings change identity, ownership, cardinality,
+retention, money or time semantics. Otherwise use explicit assumptions and continue
+independent work. Preserve settled choices outside the requested change. A column
+constraint fix does not require redesigning every table or reopening an accepted
+normalization decision; a full schema review covers all included invariants.
 
-Before modeling, establish the requested outcome, schema boundary, work mode (design, review, or implementation), target PostgreSQL version when relevant, available evidence, and success criteria. Distinguish confirmed rules from inferences and assumptions; surface the distinctions that affect the design.
+## Model the affected facts
 
-- For design, review, or planning requests, inspect available product contracts, code, schemas, migrations, queries, and tests; preserve database and repository state.
-- For build or change requests, edit canonical migrations, schema definitions, models, and tests within the supplied repository, then run non-destructive validation.
-- Treat production DDL, backfills, data repair, constraint validation, and migration execution as separate production actions requiring explicit authority.
+Extract operations/states, identity and duplicate rules, cardinality/optionality,
+ownership/lifecycle/deletion, current versus historical facts, tenant/privacy and
+concurrent/retry behavior. Treat code and existing schemas as evidence; disclose
+conflicts with an explicit product rule instead of silently changing that rule.
 
-Ask a question when two plausible business meanings produce materially different identities, ownership, cardinalities, retention, money, or time semantics. Otherwise proceed with explicit assumptions.
+For each in-scope independently stored concept, name what one row means, candidate
+keys, owner and lifecycle, mutable/immutable facts, and effective versus recorded
+time when meaningful. A surrogate key does not replace business uniqueness.
+Identify both directions of each material relationship, foreign-key/delete behavior
+and any association's own attributes or identity.
 
-Finish when the applicable completion criteria below are satisfied and the requested artifact is delivered at the stated schema boundary.
+Write the functional dependencies affecting decomposition. Prefer one authoritative
+location for a mutable fact. Read the applicable [relational design branch](references/relational-design.md)
+for normalization, composite keys, temporal/subtype models, tenancy, soft deletion,
+JSON/EAV or denormalization. Explain actual update/insert/delete anomalies and
+lossless decomposition rather than performing a normal-form recital for every edit.
+Dependencies not enforced locally still need an explicit owner.
 
-## 1. Extract the invariants
+A duplicated or derived fact needs source, freshness/update, failure/repair and
+workload justification. An accepted denormalization is context for a narrow fix,
+not a new requirement to run a performance experiment. Unmeasured benefit stays
+an assumption; do not call the model faster from its shape alone.
 
-Read product language before drawing tables. Capture:
+## Map to PostgreSQL and migration
 
-- business operations and states;
-- identity and duplicate rules;
-- cardinality and optionality;
-- ownership, lifecycle, deletion, and retention;
-- mutable facts versus historical snapshots or events;
-- tenant, authorization, privacy, and audit boundaries;
-- expected reads, writes, imports, retries, and concurrent conflicts.
+Read the relevant [DDL reference](references/postgresql-ddl.md) when emitting SQL,
+choosing concrete types/constraints or planning migration. Verify material syntax
+and operational behavior for the selected PostgreSQL version, not an assumed
+latest server.
 
-Treat existing APIs and schemas as evidence. When they conflict with an explicit product rule, surface the conflict instead of silently preserving it.
+Use NOT NULL, primary/unique/foreign keys, CHECK and exclusion constraints for
+rules they can express. Match null, tenant, historical, numeric and time semantics
+to the business invariant. Put other rules in one named concurrency-safe owner
+with a falsifier; a preflight check alone cannot arbitrate competing writes.
 
-**Completion criterion:** every supplied business rule is represented as a testable invariant or an explicit assumption, including create, update, delete, duplicate/retry, and history scenarios that matter to the feature.
+For existing data, distinguish logical end state from rollout: inspect the
+violations relevant to the new rule; preserve needed old/new compatibility;
+choose supported lock/transaction behavior; bound resumable backfills; verify
+before cutover; retain rollback or roll-forward and temporary-state ownership.
+A new empty table does not need an invented production backfill campaign. Use the
+project's existing migration framework and required checks.
 
-## 2. Give each fact an identity and lifecycle
+## Challenge and finish
 
-Classify each concept as an entity, value owned by another entity, association, immutable event, or historical snapshot. For every independently stored concept, state:
+For each material changed invariant, choose representative valid and rejected or
+conflicting scenarios: duplicate, orphan, competing write, cross-tenant reference,
+null uniqueness, temporal boundary, historical mutation or dirty-data migration
+when applicable. Use the actual engine when its constraint/isolation semantics
+are claimed. A model mock or successful SQL parse does not establish enforcement.
 
-- the grain: exactly what one row represents;
-- stable identity and candidate keys;
-- owner and lifecycle;
-- mutable and immutable attributes;
-- effective time versus recorded time, when relevant.
+Design-only work supplies proposed examples at the requested fidelity. Explicit
+runnable proof needs SQL/test source, setup and assertions; unrun cases stay marked.
+Local changes use existing focused schema/migration checks, repair introduced
+failures and reuse valid same-revision/environment results. Missing infrastructure
+is an explicit limit, not permission to fabricate success or build a new platform.
 
-Use a surrogate key when it improves references or lifecycle independence; retain business identifiers as `UNIQUE` constraints when the domain says they identify duplicates.
+Report verdict, row grains/relationships, invariant-to-owner mapping, relevant
+DDL/migration decisions, assumptions and gaps. Use a diagram when it clarifies
+the relationships or is requested, not solely because a table count is reached.
+A completed proposal is not a migrated or verified-live system. Finish when the
+requested artifact and applicable checks are delivered or the precise blocker is
+stated; no unrelated schema or performance gates are implied.
 
-**Completion criterion:** every proposed relation has one declared grain, identity, owner, duplicate rule, and lifecycle; ambiguous concepts remain listed as decisions rather than hidden in columns.
-
-## 3. Make relationships explicit
-
-For each relationship, state both directions, cardinality, optionality, ownership, foreign-key direction, delete behavior, and whether the relationship has its own attributes or lifecycle. Model a many-to-many relationship as an association relation; its business identity determines its primary or unique key.
-
-Write the functional dependencies that affect decomposition: `determinant -> dependent facts`. Prefer one authoritative storage location for each mutable fact.
-
-**Completion criterion:** every relationship required by an invariant has recorded cardinality, optionality, ownership, foreign-key direction, delete behavior, and business uniqueness.
-
-## 4. Normalize, then justify exceptions
-
-Read [references/relational-design.md](references/relational-design.md) when the request includes a normalization review or the model includes composite keys, subtypes, hierarchies, temporal data, multitenancy, soft deletion, polymorphism, EAV/JSON, or denormalization.
-
-Check 1NF, 2NF, 3NF, and BCNF against candidate keys and functional dependencies. Each decomposition must be lossless. Preserve dependencies in local constraints where practical; name any invariant that now requires a transaction, trigger, or cross-relation test.
-
-Use normal forms to remove named update, insert, or delete anomalies; let the dependencies determine the relation count.
-
-For duplicated or derived facts, record:
-
-- authoritative source;
-- freshness contract and update mechanism;
-- failure and repair behavior;
-- workload evidence that pays for the added consistency cost.
-
-**Completion criterion:** every stored fact depends on the key of its relation; decompositions are lossless; every remaining dependency and intentional duplicate has one enforcement owner.
-
-## 5. Map invariants to PostgreSQL
-
-Read [references/postgresql-ddl.md](references/postgresql-ddl.md) when the requested artifact includes concrete column types, constraints, PostgreSQL DDL, or a migration plan.
-
-Choose types from domain semantics, then map invariants to `NOT NULL`, primary keys, `UNIQUE`, foreign keys, `CHECK`, and exclusion constraints. Use transaction or application enforcement only for rules PostgreSQL cannot express declaratively, and pair each such rule with a concurrency-aware test.
-
-**Completion criterion:** every invariant maps to a database constraint or to one explicitly owned enforcement path with its race model and test; version-specific syntax is verified against the target PostgreSQL version.
-
-## 6. Walk adversarial scenarios
-
-Attempt representative valid and invalid transitions:
-
-- duplicate creation and idempotent retry;
-- missing or deleted parent;
-- concurrent inserts or updates;
-- cross-tenant reference;
-- mutable reference data after historical records exist;
-- optional values participating in uniqueness;
-- time-range overlap and boundary instants;
-- migration from existing dirty or partially populated data.
-
-For repository changes, run the smallest available migration/schema checks and constraint-focused tests. For design-only work, specify executable examples that should succeed or fail.
-
-**Completion criterion:** every material invariant has at least one accepted scenario and one rejected or conflict scenario, with the responsible constraint or enforcement path named.
-
-## 7. Report the model
-
-Use the ordered template below as a menu, keeping only sections that carry information.
-
-Include a Mermaid ERD when three or more relations interact or the hierarchy is otherwise hard to read.
-
-```markdown
-## Verdict
-[Model boundary, major decisions, readiness, and artifact status: proposed, implemented locally, migrated, or verified live]
-
-## Assumptions and decisions
-- [Confirmed rule, explicit assumption, or blocking question]
-
-## Relations
-| Relation | One row represents | Identity | Owner/lifecycle |
-| --- | --- | --- | --- |
-
-## Relationships
-| From -> to | Cardinality/optionality | Enforcement | Delete behavior |
-| --- | --- | --- | --- |
-
-## Invariant coverage
-| Invariant | Constraint or owner | Validation scenario |
-| --- | --- | --- |
-
-## DDL or migration
-[Proposed or changed artifacts, compatibility, rollout, rollback/roll-forward]
-
-## Tradeoffs and gaps
-[Intentional denormalization, unenforced rules, workload handoff, open evidence]
-```
-
-**Completion criterion:** every material relation, relationship, invariant, assumption, and remaining gap appears in the report, and the verdict makes readiness unambiguous.
+Use `postgres-performance` for a distinct unresolved load/query/index question.
+The adjacent skill is not required to complete a relational decision here.

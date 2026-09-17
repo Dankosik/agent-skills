@@ -1,21 +1,27 @@
-# Tool routing for large evidence sets
+# Tool routing for bounded evidence collection
 
-Route a bounded collection stage through Programmatic Tool Calling when several independent telemetry, metric, or log sources need filtering, joining, deduplication, subtraction, ranking, or validation.
+Choose from tools the host actually exposes and the user has authorized. For
+several independent sources, supported programmatic tool calling or native
+parallel calls may reduce repeated transfer and join/filter work. Neither is a
+prerequisite. If unavailable, use direct read-only calls and process already
+retrieved data locally when allowed; do not install a runtime, invent tool names,
+request broader access or block the diagnosis merely to use this pattern.
 
-Before the program runs, name the eligible read-only tools and set the input bounds: one target cluster or service, one time window, a record limit per source, concurrency at most four, and one retry for transient failures. The program calls those named tools and returns exactly:
+Name the target cluster/service, time window, record and cost limits, source
+identities, concurrency and retry budget before collection. Keep within host
+limits and source capacity. Four concurrent reads and one transient retry are
+conservative starting bounds, not quotas to fill or overrides of tighter limits.
+Dependent probes stay sequential when each observation changes the next action.
 
-```json
-{
-  "window": {},
-  "reset_boundaries": [],
-  "resource_deltas": [],
-  "top_workloads": [],
-  "anomalies": [],
-  "missing_sources": [],
-  "evidence_refs": []
-}
-```
+Preserve enough information to audit the result: window, statistics-reset
+boundaries, comparable resource deltas, ranked workload, anomalies, missing or
+truncated sources, and references back to evidence. Use the requested format;
+a fixed JSON envelope is useful only when a consumer actually requires it. Never
+turn an inaccessible or truncated source into a zero or a successful empty result.
 
-Stop when each bounded source has succeeded or returned a structured failure after its retry.
-
-Keep hypothesis ranking, approval decisions, side-effecting actions, `EXPLAIN` safety decisions, and final validation in the direct model/tool flow. Direct calls fit stages where one result is small, each result changes the next decision, or the final answer must preserve citations or native artifacts.
+Stop bounded collection when each selected source succeeded or its permitted
+recovery is exhausted. Retain partial evidence and the specific gap. Keep causal
+judgment, authority decisions, side effects and EXPLAIN safety in the direct
+review path. Prefer direct calls when results are small, adaptive, or need native
+citations/artifacts that batching would lose. Complete supplied evidence valid for
+the same window need not be fetched again just to appear fresh.

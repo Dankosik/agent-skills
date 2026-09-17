@@ -1,110 +1,124 @@
 ---
 name: reliable-messaging
-description: "Delivery discipline for application-to-broker-to-application boundaries. Use when designing or changing publish/consume behavior, diagnosing loss, duplicates, ordering, retries, redrive, or replay, or proving a broker-backed business effect across Kafka, RabbitMQ, Amazon SQS, NATS JetStream, or an equivalent broker. Broker operations belong here when they change that delivery boundary."
+description: "Use for broker publish/consume guarantees, message identity, acknowledgement, ordering, redelivery, replay, or recovery of durable business effects."
 ---
 
 # Reliable Messaging
 
-Delivery is an application lifecycle, not a broker feature:
+**Delivery.** Follow the affected business state, message identity, publish,
+broker acceptance, consume, durable effect and acknowledgement through recovery.
+State every guarantee with its start, commit, end and accepted loss/duplicate
+window. Broker deduplication is not an end-to-end exactly-once business effect.
 
-`business state -> message identity -> durable publish -> broker acceptance -> consume -> durable effect -> acknowledge -> recover -> prove`
+## Choose depth and authority
 
-State every guarantee with its start, durable commit, end, and accepted loss or duplicate window. Use “effectively once” only for a named business effect protected by durable idempotency. Reserve “exactly once” for a proven atomic boundary; broker deduplication alone is not an end-to-end guarantee.
+Review/diagnosis reconstructs the affected boundary read-only and reports the
+supported cause, minimal correction and falsifier. Design defines the in-scope
+contracts at the requested fidelity. Build/fix changes the local owner and runs
+applicable checks, repairing introduced failures. Production publication, broker
+configuration, replay/redrive, purge/deletion, credentials and load/fault tests
+require exact environment/action/range/bounds authorization, preflight and fresh
+readback. A proposed recovery plan is not permission to execute it.
 
-## Choose the depth
+Preserve accepted decisions outside the requested change and explicit artifact or
+test limits. A narrow acknowledgement fix does not trigger a full redesign. Full
+readiness, migration or replay claims do require the complete relevant lifecycle.
+Additional safety-critical dependencies must be named; unrelated concerns do not
+become completion gates. Ask only for a material missing decision or authority.
 
-Follow only the path needed by the request:
+## Load the selected broker contract
 
-- **Review or diagnose:** reconstruct the affected boundary and its immediate dependencies, locate the earliest durable step that violates the claimed guarantee, and report the smallest correction and falsifier. Keep state unchanged.
-- **Design:** define each in-scope boundary, assumption, mechanism, and proof. Use a ledger when several boundaries interact; one row is enough for a narrow design.
-- **Build or fix:** patch the shared root cause locally and run the smallest test that fails on the old boundary and passes on the new one.
-- **Operate:** publishing, configuration changes, redrive, replay, purge, deletion, or credential rotation requires explicit authorization for the exact environment and bounds. Preflight, perform only the authorized action, and verify with fresh readback.
+Read the reference for the actual broker and relevant concern, verifying material
+version-specific behavior against current primary documentation:
 
-Do not expand a narrow acknowledgement, identity, or routing issue into a full messaging redesign unless another boundary can change the diagnosis or make the fix unsafe. A production-readiness claim, new end-to-end design, migration, redrive, or replay does require the complete in-scope lifecycle.
+- [Kafka](references/kafka.md): acceptance, offsets, transactions, partition order,
+  retention and replay.
+- [RabbitMQ](references/rabbitmq.md): routing/confirms, acknowledgements, prefetch,
+  quorum/poison handling and recovery.
+- [SQS](references/sqs.md): Standard/FIFO, identity, visibility/deletion and redrive.
+- [JetStream](references/jetstream.md): publish ACK, consumer progress, retention,
+  redelivery and replay.
+- [Operations](references/operations.md): selected ordering, backpressure,
+  quarantine, recovery, migration, security or capacity questions.
 
-Honor an explicitly requested artifact or test count. Add another item only when omitting it would make the requested result unsafe; otherwise record the extra concern as a gap.
+An unfamiliar broker needs its own documented contract, not a guess from one of
+these examples. Reference checks are conditional on the claimed guarantee; they
+do not authorize live operations or require reading all broker documents.
 
-## Load the matching contract
+## Frame identity and durable intent
 
-Read only the references that match the observed broker and requested concerns, and verify version-specific behavior against current primary documentation:
+Name the protected effect, relevant loss/duplicate tolerance, latency, ordering,
+fan-out and recovery horizon. When the architecture decision is open, compare
+synchronous calls or a single-store job with the broker's needed buffering,
+isolation, fan-out or replay. Do not repeat that comparison for a settled broker's
+narrow bug fix.
 
-- [references/kafka.md](references/kafka.md) for Kafka acceptance, offsets/groups, partition order, retention, replay, or configuration.
-- [references/rabbitmq.md](references/rabbitmq.md) for routing/confirms, acknowledgements/requeue, prefetch, quorum queues, recovery, or configuration.
-- [references/sqs.md](references/sqs.md) for Standard/FIFO delivery, visibility/deletion, group order, deduplication, DLQ/redrive, or configuration.
-- [references/jetstream.md](references/jetstream.md) for JetStream publish acknowledgement, consumers, acknowledgement/redelivery, retention, replay, or configuration.
-- [references/operations.md](references/operations.md) when ordering/concurrency/backpressure, retry/quarantine, redrive/replay/reconciliation, deploy/drain, retention/capacity, security, or operational signals are in scope.
-
-For an unfamiliar broker, derive the same lifecycle from its current official contract and label unverified behavior.
-
-## Frame the boundary
-
-Start from the business operation and protected effect. Record loss and duplicate tolerance, latency, outage window, fan-out, replay need, ordering scope, throughput, and the current evidence. First decide whether a broker earns its cost:
-
-- use a synchronous call when the caller needs the result and both sides share availability;
-- use a database-backed job when one database owns the work and independent fan-out or long replay is unnecessary;
-- use a broker for required durable buffering, failure isolation, independent consumers, fan-out, smoothing, or replay.
-
-Classify the message as an immutable **event**, a single-owner **command**, or a competing-worker **work item**. Write the guarantee as:
-
-`<semantic> from <start> after <durable evidence> through <end>; <effect> is idempotent by <key and scope>`
-
-For a multi-boundary design or readiness review, keep one row per publish or consume boundary. For a narrow task, retain only the affected row and mark decision-changing unknowns:
+Classify event, command or competing-worker item. Use one ledger row per interacting
+publish/consume boundary, or just the affected row for a narrow task:
 
 | Boundary | Guarantee/start/end | Identity/scope | Durable commit | Ambiguity | Recovery owner | Signal | Falsifier |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 
-## Define identity and schema
+A logical message ID survives publish retry, redelivery, redrive and replay; offsets,
+delivery tags, receipt handles and attempt IDs are not substitutes. Retain envelope
+fields that affect behavior: type/version, tenant, ordering/causation, immutable
+intent and safe trace references. Scope idempotency by stable logical effect and
+tenant, not mutable deployment or consumer instance. A correlation ID is not a
+deduplication key. A new dedup scheme must account for already-applied effects
+before replay, or it can reapply the very effect it should preserve.
 
-Give one logical message a producer-assigned identity that survives publish retries, redelivery, redrive, and replay. Keep it separate from delivery tags, offsets, receipt handles, sequence numbers, and broker-generated IDs.
+## Publish and commit the effect
 
-Include only envelope fields that change behavior: message ID/type, schema version, occurred-at time, correlation and causation IDs, tenant/security scope, ordering key when needed, and trace or payload-integrity metadata when useful. A correlation ID groups work; it is not a deduplication key. Scope idempotency by `(tenant, consumer/effect, message_id)` or a stronger immutable business key.
+When business state and publish intent share a database, commit state and outbox
+together. Publish with the selected durable-acceptance contract, then mark relay
+completion; lost responses remain ambiguous under the same identity. If no atomic
+intent boundary exists, name the loss/duplicate window and reconciliation owner.
+Bound publisher queues and in-flight work. Broker transactions do not join an
+unrelated business database transaction.
 
-Scope by the stable logical effect contract, not a mutable process, deployment, or consumer-instance name. When changing an existing deduplication key, seed the new identity for effects already applied before replaying only proven missing identities; otherwise the migration can reapply the first effect it was meant to preserve.
+For a transactional consumer, commit business effect and uniquely enforced
+inbox/effect identity together. For an external effect, propagate the stable
+idempotency key or durable downstream intent. Acknowledge/delete/commit recovery
+progress only after the relevant durable effect. Concurrent completions cannot
+acknowledge past unfinished work in an ordered lane. A preflight dedup read alone
+leaves a race.
 
-Name the schema owner and compatibility rule. Prefer additive evolution with tolerant consumers deployed before new producers. Define the retirement condition for old readers/writers and protect sensitive payloads and metadata.
+Effect-before-ACK crashes and lost ACK responses must converge on durable state
+without multiplying effects. Retain dedup information across the longest
+redelivery, redrive, retention and offline-replay horizon; never-repeatable effects
+may require a permanent business key. Keep schema compatibility and retirement
+conditions for the producers/consumers that can coexist.
 
-## Make publication durable
+## Prove the requested boundary
 
-Locate the first durable publish-intent commit. When business state and intent share a database, commit the state change and outbox row together. The outbox carries the final identity and immutable routing/schema data.
+Use [proof receipt](references/proof-receipt.md) as an optional coverage aid when
+several artifacts or guarantees interact. It is not a required hidden ledger,
+reasoning procedure or extra self-review pass; one focused test need not load it.
+Preserve explicit requested evidence rather than prescribing how to think.
 
-Relay with bounded claims and retries: publish through the broker’s durable acceptance mechanism, mark published only after acceptance is observed, reuse the same logical identity when the response is lost, and reclaim expired claims. Broker transactions do not join an unrelated business database transaction.
+Choose failures around the affected durable boundary: intent/acceptance loss,
+effect-before-ACK, ACK loss, competing attempt, ownership expiry, poison/retry,
+replay or mixed-version behavior where those paths matter. A full readiness claim
+must cover both sides of each relevant commit. A new quarantine guarantee includes
+bounded redrive preserving original identity and business state, not just a DLQ.
 
-If no atomic outbox or equivalent exists, name the loss/duplicate window and reconciliation owner. Bound publisher queues and in-flight requests so backpressure reaches ingress or durable storage rather than an unbounded memory queue.
+Pin engine/client, topology, durability settings and relevant workload. Assert
+business state plus actual broker progress/identity for broker claims; a once-called
+mock handler is insufficient. Use existing local harnesses and a test that would
+distinguish the absent commit/idempotency mechanism. Explicit runnable requests
+need source, setup and assertions; design/audit evidence may be proposed or unrun.
+Unavailable infrastructure is a disclosed limit, not an inferred guarantee.
 
-## Commit the effect before acknowledgement
+## Report and complete
 
-Assume another attempt can exist whenever acknowledgement, visibility, ownership, or replay can repeat delivery. For a transactional effect, atomically commit the business effect and an inbox/idempotency record protected by a unique key. For an external effect, pass the same durable business key downstream or enqueue it through a local outbox.
+Lead with verdict, affected guarantee, cause/design, recovery, observed proof and
+authority/gaps. Keep all requested artifacts and distinguish proposed, locally
+implemented, tested, deployed and verified-live states. A local fix can be complete
+without claiming production readiness. Reuse valid same-revision/environment
+results, repair introduced failures and stop when the requested result and
+applicable checks are satisfied or a concrete blocker is reported. Do not invent
+new clusters, full load campaigns or unrelated cleanup to finish a narrow task.
 
-Acknowledge, delete, or commit an offset only after the durable effect commits. A crash after effect commit but before acknowledgement must converge on the recorded effect. Treat a lost acknowledgement response as ambiguous: reread durable state and accept safe redelivery. A check-then-act query without a unique constraint or atomic downstream operation leaves a concurrent duplicate gap.
-
-Choose deduplication retention from the longest broker retention, redelivery, redrive, offline-recovery, and replay horizon plus margin. Keep a permanent business key when repeating the effect is never valid.
-
-## Prove the claimed boundary
-
-For a multi-boundary design, readiness review, migration, replay or redrive plan, or a task requesting runnable code or tests, read [references/proof-receipt.md](references/proof-receipt.md) and complete its private receipt before finalizing. Skip it for a single-boundary factual diagnosis unless the user requests a proof artifact.
-
-Choose tests from the guarantee, not from the mechanism’s happy path. At minimum, inject failures on both sides of each in-scope durable commit:
-
-- business commit versus publish intent and broker acceptance versus relay completion;
-- effect commit versus acknowledgement, including lost responses and concurrent duplicates;
-- ownership expiry or transfer, poison input, retry exhaustion, and replay when those paths are in scope;
-- mixed versions, authorization denial, and cross-tenant attempts when those risks are in scope.
-
-If the design introduces quarantine, enumerate a separate bounded-redrive test in the Proof artifact; do not leave it implicit in rollout prose. The test preserves original identity, checks duplicate suppression and business state, and stops on a predeclared invariant.
-
-Pin broker/client versions, topology, durability settings, workload, concurrency, and fault injection. Verify business state, logical identity, broker progress, attempts, quarantine, and recovery signals. A falsifier is useful only if removing the claimed commit or idempotency mechanism makes it fail.
-
-For a narrow review, a causal finding, minimal target, recovery owner, and runnable falsifier complete the task. For production readiness, every ledger row must define its guarantee, identity, durable commits, ambiguous outcome, bounded recovery, signal, and executable falsifier.
-
-## Report
-
-Lead with the verdict and current state: proposed, implemented locally, deployed, or verified live. Use only sections that carry decision-changing information:
-
-```markdown
-## Verdict
-## Boundary and guarantee
-## Root cause or design
-## Recovery and operations
-## Proof and remaining gaps
-## Authorization required
-```
+Adjacent job execution, schema, external API and cache decisions may use their
+matching skills when genuinely unresolved. Names are navigation, not dependencies
+or automatic handoffs; preserve this skill's identity and delivery ownership.
